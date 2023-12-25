@@ -1,0 +1,14 @@
+SizeOfVector: 5
+Lsqrt: 1
+InputA: SimpleTest\QUBO\QUBOSimpleQ.txt
+## InputA: maxCut/g05_100.0Q
+## InputB: SimpleTest/IsingSimpleb01.txt
+IsingorQUBO: QUBO
+## Ising
+num_replicas: 8
+minTemp: 1
+maxTemp: 4
+exchange_attempts: 10000
+NumberOfIteration: 100000
+outputDir: SimpleTest\QUBO
+## outputDir: maxCutOutput
