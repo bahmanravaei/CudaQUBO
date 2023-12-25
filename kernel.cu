@@ -20,12 +20,15 @@ __global__ void addKernel(double *c, const double*a, const double*b)
     c[i] = a[i] + b[i];
 }
 
-                    //metropolisKernel(double* dev_H, double* dev_DelH, double* dev_W, double* dev_B, int* dev_Y, double* dev_E, double* dev_M, int* dev_bestSpinModel)
-__global__ void metropolisKernelTest(double* dev_H, double** dev_DelH, double* dev_DelH_sign, double* dev_B, int* dev_Y, int lenY, double* dev_E, double OldE, double* dev_M, int* dev_bestSpinModel, int best_energy, int* dev_Selected_index, int exchange_attempts, double T)
+
+__global__ void metropolisKernelTest(double* dev_H, double** dev_DelH, double* dev_DelH_sign, double* dev_B, int* dev_Y, int lenY, double* dev_E, double OldE, int* dev_bestSpinModel, int best_energy, int exchange_attempts, double T)
 {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int i = threadIdx.x;
     curandState state;
+
+    //int* dev_Selected_index
+    extern __shared__ int dev_Selected_index[];
 
     for (int step = 0; step < exchange_attempts ; step++) {
         //compute Delata energy
@@ -91,14 +94,16 @@ __global__ void metropolisKernelTest(double* dev_H, double** dev_DelH, double* d
 
 }
   
-cudaError_t prepareMetropolisKernel(double* H, double** DelH, double** W, double* B, int* Y, int lenY, double* M, double* E, double T, int step, int exchange_attempts, double bestEnergy, int* bestSpinModel) {
+cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, double* WGpu, double* B, int* Y, int lenY, double* M, double* E, double T, int step, int exchange_attempts, double bestEnergy, int* bestSpinModel) {
     
        
     double* dev_H = 0;
     double* dev_DelH = 0;
+    double* dev_DelH_sign;
     double* dev_W = 0;
     double* dev_B = 0;
     int* dev_Y = 0;
+
 
     int* dev_Flag;
 
@@ -119,11 +124,12 @@ cudaError_t prepareMetropolisKernel(double* H, double** DelH, double** W, double
     // Allocate GPU buffers for inputs and outputs.
     cudaMalloc((void**)&dev_H, lenY * sizeof(double));
     cudaMalloc((void**)&dev_DelH, lenY * lenY * sizeof(double));
+    cudaMalloc((void**)&dev_DelH_sign, lenY * lenY * sizeof(int));
     cudaMalloc((void**)&dev_W, lenY * lenY * sizeof(double));
     cudaMalloc((void**)&dev_B, lenY * sizeof(double));
     cudaMalloc((void**)&dev_Y, lenY * sizeof(int));
     cudaMalloc((void**)&dev_E, exchange_attempts * sizeof(double));
-    cudaMalloc((void**)&dev_M, exchange_attempts * sizeof(double));
+    //cudaMalloc((void**)&dev_M, exchange_attempts * sizeof(double));
     cudaMalloc((void**)&dev_bestSpinModel, lenY * sizeof(int));
     cudaMalloc((void**)&dev_Flag, lenY * sizeof(int));
     
@@ -132,8 +138,8 @@ cudaError_t prepareMetropolisKernel(double* H, double** DelH, double** W, double
     
     // Copy input vectors from host memory to GPU buffers.
     cudaMemcpy(dev_H, H, lenY * sizeof(double), cudaMemcpyHostToDevice);
-    //cudaMemcpy(dev_DelH, DelH, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
-    //cudaMemcpy(dev_W, W, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_DelH, DelHGpu, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_W, WGpu, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(dev_B, B, lenY * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(dev_Y, Y, lenY * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(dev_bestSpinModel, bestSpinModel, lenY * sizeof(int), cudaMemcpyHostToDevice);
@@ -142,9 +148,8 @@ cudaError_t prepareMetropolisKernel(double* H, double** DelH, double** W, double
 
 
     // Launch a kernel on the GPU with one thread for each element.
-    //metropolisKernel <<<1, size >>> (dev_H, dev_DelH, dev_W, dev_B, dev_Y, dev_E, dev_M, dev_bestSpinModel, exchange_attempts);
-    metropolisKernelTest << <1, lenY >> > (dev_H, dev_DelH, dev_B, dev_Y, dev_E, dev_M, dev_bestSpinModel, dev_Flag, exchange_attempts, T);
-    metropolisKernelTest(double* dev_H, double** dev_DelH, double* dev_DelH_sign, double* dev_B, int* dev_Y, int lenY, double* dev_E, double OldE, double* dev_M, int* dev_bestSpinModel, int best_energy, int* dev_Selected_index, int exchange_attempts, double T)
+    metropolisKernelTest <<<1, lenY >>> (dev_H, dev_DelH, dev_DelH_sign, dev_B, dev_Y,lenY, dev_E, dev_bestSpinModel, exchange_attempts, T);
+    //metropolisKernelTest(double* dev_H, double** dev_DelH, double* dev_DelH_sign, double* dev_B, int* dev_Y, int lenY, double* dev_E, double OldE, int* dev_bestSpinModel, int best_energy, int* dev_Selected_index, int exchange_attempts, double T)
 
 
     // Check for any errors launching the kernel
@@ -170,7 +175,7 @@ cudaError_t prepareMetropolisKernel(double* H, double** DelH, double** W, double
     //cudaMemcpy(bestSpinModel, dev_bestSpinModel, lenY * sizeof(int), cudaMemcpyDeviceToHost);
 
     cudaMemcpy(E + step, dev_E, exchange_attempts * sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(M + step, dev_M, exchange_attempts * sizeof(double), cudaMemcpyDeviceToHost);
+    //cudaMemcpy(M + step, dev_M, exchange_attempts * sizeof(double), cudaMemcpyDeviceToHost);
        
 
 
@@ -181,7 +186,7 @@ Error:
     cudaFree(dev_B);
     cudaFree(dev_Y);
     cudaFree(dev_E);
-    cudaFree(dev_M);
+    //cudaFree(dev_M);
     cudaFree(dev_Flag);
     cudaFree(dev_bestSpinModel);
 
@@ -245,6 +250,13 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
     double** H = ComputeH_forAllReplica(num_replicas, W, B, Y, lenY);
     double*** DelH = ComputeDelH_forAllReplica(num_replicas, W, Y, lenY);
 
+    double** DelHGpu;
+    double* WGpu;
+    if (ExecuteMode == QUBOGPU) {
+        DelHGpu = convertDelHtoGpuDelH(DelH, num_replicas, lenY);
+        WGpu = convert2Dto1D(W, lenY, lenY);
+    }
+
     //testHamiltonianPreparation(W, B, lenY);
     //int tempValue;
     //cin >> tempValue;
@@ -288,7 +300,7 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
             //for (int spin = 0; spin < lenY/25; spin++) 
             
             if (ExecuteMode == QUBOGPU) {                
-                prepareMetropolisKernel(H[r], DelH[r], W, B, Y[r], lenY, M[r], E[r], T, step, exchange_attempts, bestEnergy, bestSpinModel);
+                prepareMetropolisKernel(H[r], DelHGpu[r], WGpu, B, Y[r], lenY, M[r], E[r], T, step, exchange_attempts, bestEnergy, bestSpinModel);
                 
             }
             else {

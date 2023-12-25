@@ -154,3 +154,18 @@ void testHamiltonianPreparation(double** Q, double* C, int lenX) {
     cout << Flag << endl;
 
 }
+
+
+double** convertDelHtoGpuDelH(double*** DelH, int num_replicas, int lenY) {
+    double** GpuDelH = Declare2D_Array(num_replicas, lenY);
+
+    for (int r = 0; r < num_replicas; r++) {
+        for (int i = 0; i < lenY; i++) {
+            for (int j = 0; j < lenY; j++) {
+                GpuDelH[r][j * lenY + i] = DelH[r][i][j];
+            }
+        }
+    }
+    return GpuDelH;
+}
+
