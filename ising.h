@@ -213,6 +213,15 @@ double** Declare2D_Array(int row, int col) {
     return Matrix;
 }
 
+// dynamically allocate memory for 2d Integer arrays
+int** Declare2D_ArrayInt(int row, int col) {
+    int** Matrix = new int* [row];
+    for (int i = 0; i < row; i++) {
+        Matrix[i] = new int[col];
+    }
+    return Matrix;
+}
+
 double*** Declare3D_Array(int lenDim1, int lenDim2, int lenDim3) {
     double*** ARR = new double** [lenDim1];
     for (int i = 0; i < lenDim1; i++) {

@@ -97,6 +97,15 @@ void fill2Darray(double** A, double fillWith, int row, int col) {
     }
 }
 
+void fill2DarrayInt(int** A, int fillWith, int row, int col) {
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++) {
+
+            A[i][j] = fillWith;
+        }
+    }
+}
+
 void print2D_arr_double(double** D, int lenRow, int lenCol) {
 	std::cout << "[";
 	for (int i = 0; i < lenRow; i++) {
@@ -157,7 +166,7 @@ void testHamiltonianPreparation(double** Q, double* C, int lenX) {
 
 
 double** convertDelHtoGpuDelH(double*** DelH, int num_replicas, int lenY) {
-    double** GpuDelH = Declare2D_Array(num_replicas, lenY);
+    double** GpuDelH = Declare2D_Array(num_replicas, lenY*lenY);
 
     for (int r = 0; r < num_replicas; r++) {
         for (int i = 0; i < lenY; i++) {
