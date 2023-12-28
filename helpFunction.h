@@ -49,17 +49,25 @@ void testPointer(int** X, int num_replicas) {
 
 
 
+unsigned int nextPowerOf2(unsigned int N) {
+    N--; // Ensure that if N is a power of 2, the result is not doubled
+    N |= N >> 1;
+    N |= N >> 2;
+    N |= N >> 4;
+    N |= N >> 8;
+    N |= N >> 16;
+    return N + 1;
+}
 
-
-void printX(int* X, int lenX) {
-	std::cout << "X : [";
+void printX(int* X, int lenX, string str) {
+	std::cout << str << " : [";
 	for (int i = 0; i < lenX; i++)
 		std::cout << X[i] << " ";
 	std::cout << "] " << endl;
 }
 
-void printH(double* H, int lenH) {
-	std::cout << "H : [";
+void printH(double* H, int lenH, string str) {
+	std::cout << str <<" : [";
 	for (int i = 0; i < lenH; i++)
 		std::cout << H[i] << " ";
 	std::cout << "] " << endl;
@@ -126,7 +134,7 @@ bool testEveryThing(double** Q, double* C, int* X, int* List, int lenList, int l
     double Ed = E;
     double* H = new double[lenX];
     computeH(Q, C, H, X, lenX);
-    printH(H, lenX);
+    printH(H, lenX, "H");
     double** Del_H = Declare2D_Array(lenX, lenX);
     delta_H(Q, Del_H, X, lenX);
     print2D_arr_double(Del_H, lenX, lenX);

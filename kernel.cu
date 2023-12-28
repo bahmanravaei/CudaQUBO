@@ -15,70 +15,87 @@ __global__ void metropolisKernelTest(double* dev_H, double* dev_DelH, int* dev_D
 {
     int tid = threadIdx.x;// +blockIdx.x * blockDim.x;
     //int i = threadIdx.x;
+    extern __shared__ int sdata[];
     curandState state;
 
     //int* dev_Selected_index
     //extern __shared__ int dev_Selected_index[];
     if (tid < dev_lenY) {
         for (int step = 1; step < exchange_attempts; step++) {
-            //compute Delata energy
-            double deltaE = -1 * (1 - dev_Y[tid]) * dev_H[tid];
             
+            //compute Delata energy
+            double deltaE = -1 * (1 - 2* dev_Y[tid]) * dev_H[tid];
+            //printf("Thread %d: Local variable value = %f\n", threadIdx.x, deltaE);
             // Make decision that a bit flip can be accepted
-            curand_init(0, tid, 0, &state);
-            //curand_init(seed, tid, 0, &state);
-            //double pr = curand_uniform_double(&state)
+            curand_init(clock64(), tid, clock64(), &state);
             
             if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / T))) {
                 dev_Selected_index[tid] = tid;
             }
-            /*else {
+            else {
                 dev_Selected_index[tid] = -1;
-            }*/
-            
+            }            
+            __syncthreads();
+
             // select which bit accepted
-            for (int s = dev_lenY; s > 0; s >>= 1)
+            
+            for (int s = blockDim.x / 2; s > 0; s >>= 1)
             {
-                if (tid < s)
+                if (tid<s)
                 {
                     if (dev_Selected_index[tid] != -1 && dev_Selected_index[tid + s] != -1)
                     {
                         // Generate a random integer (0 or 1)
 
                         if ((curand(&state) % 2) == 1)
-                            dev_Selected_index[tid] = tid + s;
+                            dev_Selected_index[tid] = dev_Selected_index[tid + s];
                     }
                     else if (dev_Selected_index[tid] == -1 && dev_Selected_index[tid + s] != -1) {
-                        dev_Selected_index[tid] = tid + s;
+                        dev_Selected_index[tid] = dev_Selected_index[tid + s];
                     }
                 }
+                __syncthreads();
             }
+            
             __syncthreads();
             // based on flipped bit do some calculation
-            if (tid == dev_Selected_index[0]) {
+            int j = dev_Selected_index[0];
+            if (tid == j) {
                 dev_Y[tid] = 1 - dev_Y[tid];
                 dev_E[step] = dev_E[step - 1] + deltaE;
                 if (dev_E[step] < *best_energy) {
                     *best_energy = dev_E[step];
                     dev_bestSpinModel[tid] = dev_Y[tid];
                 }
+                //printf("Thread %d: flipped bit = %d, En: %f -> %f (delE: %f) bestE: %f\n", tid, j, dev_E[step-1], dev_E[step], deltaE, *best_energy);
+                //printf("\t\t step %d [%d, %d, %d, %d, %d]\n", step, dev_Y[0], dev_Y[1], dev_Y[2], dev_Y[3], dev_Y[4]);
             }
             __syncthreads();
 
-
-            dev_H[tid] = dev_H[tid] + dev_DelH[tid + dev_Selected_index[0] * dev_lenY];
-            //dev_H[tid] = dev_H[tid] + dev_DelH[tid][dev_Selected_index[0]] * dev_DelH_sign[tid];
-
-
-            if (tid == dev_Selected_index[0]) {
+            if (j != -1) {
+                //printf("\t\t\t\t J= %d change dev_H(tid) (%d) : [%f => %f]\n", j, tid, dev_H[tid], dev_H[tid] + dev_DelH[tid + j * dev_lenY]);
+                //Update H
+                dev_H[tid] = dev_H[tid] + dev_DelH[tid + j * dev_lenY];
+                
+                //dev_H[tid] = dev_H[tid] + dev_DelH[tid][dev_Selected_index[0]] * dev_DelH_sign[tid];
+            }
+            else {
+                dev_E[step] = dev_E[step - 1];
+            }
+            
+            // Update delta_H
+            if (tid == j) {
                 for (int i = 0; i < dev_lenY; i++) {
-                    dev_DelH[tid + dev_Selected_index[0] * dev_lenY] *= -1;
+                    //printf("\t\t\t\t change dev_DelH(i, j=tid) (%d, %d) : [%f =>", i, j, dev_DelH[i + j * dev_lenY]);
+                    dev_DelH[i + j * dev_lenY] *= -1;
+                    //printf("% f]\n", dev_DelH[i + j * dev_lenY]);
                 }
             }
 
 
             //dev_bestSpinModel[i] *= (1 - dev_Y[i]);
             //dev_E[counter] = exchange_attemps - counter;
+            //break;
         }
     }
 }
@@ -108,14 +125,18 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     //double* dev_B = 0;
     
     //double* dev_M = 0;
-
+    int block_size = nextPowerOf2(lenY);
+    //cout << "block size : " << block_size << endl;
+    //printH(H, lenY, " H: ");
+    //printH(DelHGpu, lenY * lenY, "DelHGpu");
+    //printX(Y, lenY, "init Y");
+    //printH(WGpu, lenY * lenY, "WGpu");
+    //cout << "energy: " << E[0] << " ->" << E[1] << endl;
 
     cudaError_t cudaStatus;
-    cout<<"replica: "<< replica << " bestEnergy: " << bestEnergy << "\t\t\t\t\t In prepareMetropolisKernel  first lines \n";
+    //cout<<"replica: "<< replica << " bestEnergy: " << bestEnergy << "\t\t\t\t\t In prepareMetropolisKernel  first lines \n";
 
-    
-    
-
+     
     // Choose which GPU to run on, change this on a multi-GPU system.
     cudaStatus = cudaSetDevice(0);
     checkErrorCuda(cudaStatus, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
@@ -132,7 +153,7 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     //cudaMalloc((void**)&dev_B, lenY * sizeof(double));
     cudaStatus = cudaMalloc((void**)&dev_Y, lenY * sizeof(int));
     checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_Y");
-    cudaStatus = cudaMalloc((void**)&dev_Selected_index, lenY * sizeof(int));
+    cudaStatus = cudaMalloc((void**)&dev_Selected_index, block_size * sizeof(int));
     checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_Selected_index");
     cudaStatus = cudaMalloc((void**)&dev_E, (exchange_attempts + 1) * sizeof(double));
     checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_E");
@@ -168,7 +189,7 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     cudaStatus = cudaMemset(dev_lenY, lenY, sizeof(int));
     checkErrorCuda(cudaStatus, "cudaMemset failed! dev_lenY");
 
-    cudaStatus = cudaMemset(dev_Selected_index, -1, lenY * sizeof(int));
+    cudaStatus = cudaMemset(dev_Selected_index, -1, block_size * sizeof(int));
     checkErrorCuda(cudaStatus, "cudaMemset failed! dev_Selected_index");
     
     
@@ -178,14 +199,15 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     //cudaMemset(dev_oldE, E[step-1], sizeof(double));
 
     
-    cout << "\t\tBefore metropolisKernelTest" << endl;
+    //cout << "\t\tBefore metropolisKernelTest" << endl;
     
+
     // Launch a kernel on the GPU with one thread for each element.
-    metropolisKernelTest <<<1, lenY >>> (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, exchange_attempts, T);
+    metropolisKernelTest <<<1, block_size >>> (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, exchange_attempts, T);
 
     cudaStatus = cudaGetLastError();
     checkErrorCuda(cudaStatus, "prepareMetropolisKernel launch failed : !");
-    cout << "\t\tafter metropolisKernelTest" << endl;
+    //cout << "\t\t\t After metropolisKernelTest" << endl;
 
     // Check for any errors launching the kernel
     cudaStatus = cudaGetLastError();
@@ -216,7 +238,10 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     cudaStatus = cudaMemcpy(DelH_sign, dev_DelH_sign, lenY * sizeof(int), cudaMemcpyDeviceToHost);
     checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_DelH_sign -> DelH_sign");
 
-    cout << " \t Best Energy: " << bestEnergy << endl;
+    cout << " \t\t\t Best Energy: " << bestEnergy << endl;
+    //cout << "\t\t\t energy: " << E[0] << " ->" << E[1] << endl;
+    //printX(Y, lenY, "\t\t\tY after metropolis");
+    //printH(H, lenY, "\t\t\t H: ");
 
 Error:
     cudaFree(dev_H);
@@ -235,133 +260,7 @@ Error:
 
 
 }
-
-  
-cudaError_t prepareMetropolisKernel2(double* H, double* DelHGpu, double* WGpu, double* B, int* Y, int lenY, double* M, double* E, double T, int step, int exchange_attempts, double& bestEnergy, int* bestSpinModel) {
-    
-       
-    double* dev_H = 0;
-    double* dev_DelH = 0;
-    int* dev_DelH_sign;
-    double* dev_W = 0;
-    //double* dev_B = 0;
-    int* dev_Y = 0;
-    double* dev_bestenergy = 0;
-    //double* dev_oldE;
-
-
-    //int* dev_Flag;
-
-    double* dev_E = 0;
-    //double* dev_M = 0;
-    int* dev_bestSpinModel=0;
-    
-    cudaError_t cudaStatus;
-
-
-    // Choose which GPU to run on, change this on a multi-GPU system.
-    cudaStatus = cudaSetDevice(0);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
-        goto Error;
-    }
-
-    // Allocate GPU buffers for inputs and outputs.
-    cudaMalloc((void**)&dev_H, lenY * sizeof(double));
-    cudaMalloc((void**)&dev_DelH, lenY * lenY * sizeof(double));
-    cudaMalloc((void**)&dev_DelH_sign, lenY * sizeof(int));
-    cudaMalloc((void**)&dev_W, lenY * lenY * sizeof(double));
-    //cudaMalloc((void**)&dev_B, lenY * sizeof(double));
-    cudaMalloc((void**)&dev_Y, lenY * sizeof(int));
-    cudaMalloc((void**)&dev_E, (exchange_attempts+1) * sizeof(double));
-    cudaMalloc((void**)&dev_bestSpinModel, lenY * sizeof(int));
-    //cudaMalloc((void**)&dev_Flag, lenY * sizeof(int));
-    cudaMalloc((void**)&dev_bestenergy, sizeof(double));
-    
-
-
-    cudaStatus = cudaGetLastError();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "prepareMetropolisKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
-    goto Error;
-
-    
-    // Copy input vectors from host memory to GPU buffers.
-    cudaMemcpy(dev_H, H, lenY * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_DelH, DelHGpu, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_W, WGpu, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
-    //cudaMemcpy(dev_B, B, lenY * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_Y, Y, lenY * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_bestSpinModel, bestSpinModel, lenY * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_bestenergy, &bestEnergy, sizeof(double), cudaMemcpyHostToDevice);
-    //cudaMemset(dev_bestenergy, bestEnergy, sizeof(double));
-    cudaMemcpy(dev_E, E+step - 1, sizeof(double), cudaMemcpyHostToDevice);
-    //cudaMemset(dev_E, E[step-1], sizeof(double));
-    //cudaMemset(dev_oldE, E[step-1], sizeof(double));
-
-    cout << "before metropolisKernelTest" << endl;
-    // Launch a kernel on the GPU with one thread for each element.
-    //metropolisKernelTest <<<1, lenY >>> (dev_H, dev_DelH, dev_DelH_sign, dev_Y, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, exchange_attempts, T);
-   
-    
-    cout << "after metropolisKernelTest" << endl;
-
-    // Check for any errors launching the kernel
-    cudaStatus = cudaGetLastError();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "prepareMetropolisKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
-
-    // cudaDeviceSynchronize waits for the kernel to finish, and returns
-    // any errors encountered during the launch.
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching metropolisKernel!\n", cudaStatus);
-        goto Error;
-    }
-
-    // Copy output vector from GPU buffer to host memory.
-
-    cudaMemcpy(H, dev_H, lenY * sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(DelHGpu, dev_DelH, lenY * lenY * sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(Y, dev_Y, lenY * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(bestSpinModel, dev_bestSpinModel, lenY * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&bestEnergy, dev_bestenergy, sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(E + step, dev_E, exchange_attempts * sizeof(double), cudaMemcpyDeviceToHost);
-    //cudaMemcpy(M + step, dev_M, exchange_attempts * sizeof(double), cudaMemcpyDeviceToHost);
-       
-    cout << bestEnergy << endl;
-
-Error:
-    cudaFree(dev_H);
-    cudaFree(dev_DelH);
-    cudaFree(dev_DelH_sign);
-    cudaFree(dev_W);
-    //cudaFree(dev_B);
-    cudaFree(dev_Y);
-    cudaFree(dev_E);
-    //cudaFree(dev_Flag);
-    cudaFree(dev_bestSpinModel);
-    cudaFree(dev_bestenergy);
-
-
-    return cudaStatus;
-
-
-}
-
 /* ***************************************************************** */
-
-
-__global__ void metropolisKernel(double* dev_H, double* dev_DelH, double* dev_W, double* dev_B, int* dev_Y, double* dev_E, double* dev_M, int* dev_bestSpinModel)
-{
-    //int i = threadIdx.x;
-    
-}
-
 
 
 
@@ -452,20 +351,18 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
     // Perform the Metropolis function numberOfIteration times for each replica 
     for (int step = 1; step < numberOfIteration; step++) {
         //cout << "step: " << step << endl;
-        cout << "before prepareMetropolisKernel calling/ step: " << step << endl;
+        cout << "******************* before prepareMetropolisKernel calling/ step: " << step << endl;
         for (int r = 0; r < num_replicas; r++) {
             T = Temperature[r];
             double previousE = E[r][step - 1];
             //for (int spin = 0; spin < lenY/25; spin++) 
             
             if (ExecuteMode == QUBOGPU) {                
-                printX(Y[r], lenY);
-                printH(H[r], lenY);
-                print2D_arr_double(DelH[r], lenY, lenY);
+                //printX(Y[r], lenY, "Y["+to_string(r)+"]");
+                //printH(H[r], lenY, "H");
+                //print2D_arr_double(DelH[r], lenY, lenY);
                 prepareMetropolisKernel(H[r], DelHGpu[r], DelH_sign[r], WGpu, B, Y[r], lenY, M[r], E[r], T, step, exchange_attempts, bestEnergy, bestSpinModel, r);
-                
-
-                
+                    
             }
             else {
                 previousE = metropolis(ExecuteMode, W, B, H[r], DelH[r], Y[r], lenY, previousE, T, step, r);
@@ -483,6 +380,8 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
         }
         else if (ExecuteMode == QUBOGPU) {
             step = step + exchange_attempts-1;
+            replicaExchangeGpu(Temperature, num_replicas, Y, E, step, H, DelHGpu, DelH_sign, exchangeFlag);
+            
             cout << "after prepareMetropolisKernel calling/ step: " << step << endl;
         }
 

@@ -1,0 +1,11 @@
+Folder already exists
+B filled with zero
+Temperature: 1
+Temperature: 1.42857
+Temperature: 1.85714
+Temperature: 2.28571
+Temperature: 2.71429
+Temperature: 3.14286
+Temperature: 3.57143
+Temperature: 4
+before prepareMetropolisKernel calling/ step: 1

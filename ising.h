@@ -340,3 +340,33 @@ void replicaExchange(double* Temperature, int num_replicas, int** Y, double** M,
         }
     }
 }
+
+void replicaExchangeGpu(double* Temperature, int num_replicas, int** Y, double** E, int step, double** H, double** DelH, int ** DelH_sign, int& exchangeFlag) {
+
+    double* delta_beta = new double[num_replicas];
+    double* delta_energy = new double[num_replicas];
+
+    for (int r = 0; r < num_replicas - 1; ++r) {
+        delta_beta[r] = Temperature[r] - Temperature[r + 1];
+        delta_energy[r] = (1 / Temperature[r] - 1 / Temperature[r + 1]) * (E[r][step] - E[r + 1][step]);
+    }
+
+
+    for (int r = 0; r < num_replicas - 1; ++r) {
+        if (exchangeFlag == 0 && (delta_energy[r] > 0 || (rand() / static_cast<double>(RAND_MAX)) < exp(delta_beta[r] * delta_energy[r]))) {
+            exchangeFlag = 1;
+            //std::cout << "Exchange " << r << " <-> " << r + 1 << std::endl;
+            std::swap(Y[r], Y[r + 1]);
+            std::swap(H[r], H[r + 1]);
+            std::swap(DelH[r], DelH[r + 1]);
+            std::swap(DelH_sign[r], DelH_sign[r + 1]);
+            
+            //spins[replica, :], spins[replica + 1, :] = spins[replica + 1, :], spins[replica, :]
+
+            std::swap(E[r][step], E[r + 1][step]);
+        }
+        else {
+            exchangeFlag = 0;
+        }
+    }
+}
