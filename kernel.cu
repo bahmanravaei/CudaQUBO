@@ -103,6 +103,9 @@ void checkErrorCuda(cudaError_t cudaStatus, string message) {
     }
 }
 
+void allocateMemory() {
+
+}
 
 // prepare memory to call Gpu Kernel
 cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, double* WGpu, double* B, int* Y, int lenY, double* M, double* E, double T, int step, int exchange_attempts, double& bestEnergy, int* bestSpinModel, int replica) {
