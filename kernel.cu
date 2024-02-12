@@ -325,7 +325,7 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
     // Perform the Metropolis function numberOfIteration times for each replica 
     for (int step = 1; step < numberOfIteration; step++) {
         //cout << "step: " << step << endl;
-        cout << "******************* before prepareMetropolisKernel calling/ step: " << step << endl;
+        //cout << "******************* before prepareMetropolisKernel calling/ step: " << step << endl;
         for (int r = 0; r < num_replicas; r++) {
             T = Temperature[r];
             double previousE = E[r][step - 1];
