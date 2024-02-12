@@ -414,8 +414,8 @@ def main():
     execute_setting_button = tk.Button(root, text="Execute QUBO", command=lambda: run_qubo(analyze_button))
     execute_setting_button.grid(row=3, column=3)
     
-    #analyze_button = tk.Button(root, text="Analyze the results", command=analyze, state='disabled')
-    analyze_button = tk.Button(root, text="Analyze the results", command=analyze)
+    analyze_button = tk.Button(root, text="Analyze the results", command=analyze, state='disabled')
+    #analyze_button = tk.Button(root, text="Analyze the results", command=analyze)
     analyze_button.grid(row=4, column=4)
 
 
