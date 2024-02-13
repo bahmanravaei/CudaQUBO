@@ -103,8 +103,113 @@ void checkErrorCuda(cudaError_t cudaStatus, string message) {
     }
 }
 
-void allocateMemory() {
+cudaError_t allocateMemory(int lenY, int block_size, int exchange_attempts, double** dev_H, double** dev_DelH, double** dev_W, double** dev_B, double** dev_E, int** dev_bestSpinModel, int** dev_Y, int** dev_Selected_index, int** dev_lenY, int** dev_DelH_sign, double** dev_bestenergy) {
 
+    cudaError_t cudaStatus;
+
+    // Choose which GPU to run on, change this on a multi-GPU system. (!For future!)
+    cudaStatus = cudaSetDevice(0);
+    checkErrorCuda(cudaStatus, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
+
+    // Allocate GPU buffers for inputs and outputs.
+    cudaStatus = cudaMalloc((void**)dev_H, lenY * sizeof(double));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_H");
+    cudaStatus = cudaMalloc((void**)dev_DelH, lenY * lenY * sizeof(double));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_DelH");
+    cudaStatus = cudaMalloc((void**)dev_DelH_sign, lenY * sizeof(int));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_DelH_sign");
+    cudaStatus = cudaMalloc((void**)dev_W, lenY * lenY * sizeof(double));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_W");
+
+
+    cudaMalloc((void**)&dev_B, lenY * sizeof(double));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_B");
+    cudaStatus = cudaMalloc((void**)dev_Y, lenY * sizeof(int));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_Y");
+    cudaStatus = cudaMalloc((void**)dev_Selected_index, block_size * sizeof(int));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_Selected_index");
+    cudaStatus = cudaMalloc((void**)dev_E, (exchange_attempts + 1) * sizeof(double));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_E");
+    cudaStatus = cudaMalloc((void**)dev_bestSpinModel, lenY * sizeof(int));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_bestSpinModel");
+    //cudaMalloc((void**)&dev_Flag, lenY * sizeof(int));
+    cudaStatus = cudaMalloc((void**)dev_bestenergy, sizeof(double));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_bestenergy");
+    cudaStatus = cudaMalloc((void**)dev_lenY, sizeof(int));
+    checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_lenY");
+
+    return cudaStatus;
+
+}
+
+cudaError_t copyMemoryFromHostToDevice(double* H, double* dev_H, double* DelHGpu, double* dev_DelH, int* DelH_sign, int* dev_DelH_sign, double* WGpu, double* dev_W, double* B, double* dev_B, int* Y, int* dev_Y, int lenY, double* E, double* dev_E, int step, double bestEnergy, double* dev_bestenergy, int* bestSpinModel, int* dev_bestSpinModel, int replica, int block_size, int* dev_Selected_index) {
+                    
+    cudaError_t cudaStatus;
+    // Copy input vectors from host memory to GPU buffers.
+
+    cudaStatus = cudaMemcpy(dev_H, H, lenY * sizeof(double), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_H");
+    cudaStatus = cudaMemcpy(dev_DelH, DelHGpu, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_DelH");
+    cudaStatus = cudaMemcpy(dev_W, WGpu, lenY * lenY * sizeof(double), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_W");
+    //cudaMemcpy(dev_B, B, lenY * sizeof(double), cudaMemcpyHostToDevice);
+    cudaStatus = cudaMemcpy(dev_Y, Y, lenY * sizeof(int), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_Y");
+    cudaStatus = cudaMemcpy(dev_bestSpinModel, bestSpinModel, lenY * sizeof(int), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_bestSpinModel");
+    cudaStatus = cudaMemcpy(dev_bestenergy, &bestEnergy, sizeof(double), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_bestenergy");
+    //cudaMemset(dev_bestenergy, bestEnergy, sizeof(double));
+    cudaStatus = cudaMemcpy(dev_E, E + step - 1, sizeof(double), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_E");
+    //cudaStatus = cudaMemset(dev_lenY, lenY, sizeof(int));
+    //checkErrorCuda(cudaStatus, "cudaMemset failed! dev_lenY");
+    cudaStatus = cudaMemset(dev_Selected_index, -1, block_size * sizeof(int));
+    checkErrorCuda(cudaStatus, "cudaMemset failed! dev_Selected_index");
+
+
+    cudaStatus = cudaMemcpy(dev_DelH_sign, DelH_sign, lenY * sizeof(int), cudaMemcpyHostToDevice);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_DelH_sign");
+    return cudaStatus;
+
+
+}
+
+cudaError_t copyMemoryFromDeviceToHost(int lenY, double* H, double* dev_H, double* DelHGpu, double* dev_DelH, int* Y, int* dev_Y, int* bestSpinModel, int* dev_bestSpinModel, double& bestEnergy, double* dev_bestenergy, double* E, double* dev_E, int* DelH_sign, int* dev_DelH_sign, int step, int exchange_attempts) {
+    cudaError_t cudaStatus;
+
+    cudaStatus = cudaMemcpy(&bestEnergy, dev_bestenergy, sizeof(double), cudaMemcpyDeviceToHost);
+    printf("Value of bestEnergy: %lf\n", bestEnergy);
+    
+    // Copy output vector from GPU buffer to host memory.
+    cudaMemcpy(H, dev_H, lenY * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(DelHGpu, dev_DelH, lenY * lenY * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(Y, dev_Y, lenY * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(bestSpinModel, dev_bestSpinModel, lenY * sizeof(int), cudaMemcpyDeviceToHost);
+    
+    cudaMemcpy(E + step, dev_E, exchange_attempts * sizeof(double), cudaMemcpyDeviceToHost);
+
+
+    cudaStatus = cudaMemcpy(DelH_sign, dev_DelH_sign, lenY * sizeof(int), cudaMemcpyDeviceToHost);
+    checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_DelH_sign -> DelH_sign");
+
+    
+
+    return cudaStatus;
+}
+
+void FreeMemoryDevice(double* dev_H, double* dev_DelH, double* dev_W, double* dev_B, double* dev_E, int* dev_bestSpinModel, int* dev_Y, int* dev_Selected_index, int* dev_lenY, int* dev_DelH_sign, double* dev_bestenergy) {
+    cudaFree(dev_H);
+    cudaFree(dev_DelH);
+    cudaFree(dev_DelH_sign);
+    cudaFree(dev_W);
+    cudaFree(dev_B);
+    cudaFree(dev_Y);
+    cudaFree(dev_E);
+    cudaFree(dev_Selected_index);
+    cudaFree(dev_bestSpinModel);
+    cudaFree(dev_bestenergy);
 }
 
 // prepare memory to call Gpu Kernel
@@ -113,6 +218,7 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     double* dev_H = 0;
     double* dev_DelH = 0;
     double* dev_W = 0;
+    double* dev_B = 0;
     double* dev_E = 0;
 
     int* dev_bestSpinModel = 0;
@@ -125,8 +231,44 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     
     int block_size = nextPowerOf2(lenY);
     
+    
+        
     cudaError_t cudaStatus;
-     
+    // Allocate GPU buffers for inputs and outputs.
+    cudaStatus = allocateMemory(lenY, block_size, exchange_attempts, &dev_H, &dev_DelH, &dev_W, &dev_B, &dev_E, &dev_bestSpinModel, &dev_Y, &dev_Selected_index, &dev_lenY, &dev_DelH_sign, &dev_bestenergy);
+
+    cudaStatus = copyMemoryFromHostToDevice(H, dev_H, DelHGpu, dev_DelH, DelH_sign, dev_DelH_sign, WGpu, dev_W, B, dev_B, Y, dev_Y, lenY, E, dev_E, step, bestEnergy, dev_bestenergy, bestSpinModel, dev_bestSpinModel, replica, block_size, dev_Selected_index);
+
+    // Launch a kernel on the GPU with one thread for each element.
+    metropolisKernel << <1, block_size >> > (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, exchange_attempts, T);
+
+    // Check for any errors launching the kernel
+    cudaStatus = cudaGetLastError();
+    checkErrorCuda(cudaStatus, "prepareMetropolisKernel launch failed : !");
+
+    // cudaDeviceSynchronize waits for the kernel to finish, and returns
+    // any errors encountered during the launch.
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching metropolisKernel!\n", cudaStatus);
+        cout << cudaGetErrorString(cudaStatus) << endl;;
+        goto Error;
+    }
+
+
+    
+    // Copy output vector from GPU buffer to host memory.
+
+    copyMemoryFromDeviceToHost(lenY, H, dev_H, DelHGpu, dev_DelH, Y, dev_Y, bestSpinModel, dev_bestSpinModel, bestEnergy, dev_bestenergy, E, dev_E, DelH_sign, dev_DelH_sign, step, exchange_attempts);
+    
+    cout << " \t\t\t Best Energy: " << bestEnergy << endl;
+
+Error:
+    FreeMemoryDevice(dev_H, dev_DelH, dev_W, dev_B, dev_E, dev_bestSpinModel, dev_Y, dev_Selected_index, dev_lenY, dev_DelH_sign, dev_bestenergy);
+
+    return cudaStatus;
+
+    /*
     // Choose which GPU to run on, change this on a multi-GPU system. (!For future!)
     cudaStatus = cudaSetDevice(0);
     checkErrorCuda(cudaStatus, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
@@ -154,11 +296,10 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_bestenergy");
     cudaStatus = cudaMalloc((void**)&dev_lenY, sizeof(int));
     checkErrorCuda(cudaStatus, "cudaMalloc failed! dev_lenY");
-        
+    */
 
 
-        
-
+    /*
     // Copy input vectors from host memory to GPU buffers.
     cudaStatus = cudaMemcpy(dev_H, H, lenY * sizeof(double), cudaMemcpyHostToDevice);
     checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_H");
@@ -184,22 +325,22 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     
     cudaStatus = cudaMemcpy(dev_DelH_sign, DelH_sign, lenY * sizeof(int), cudaMemcpyHostToDevice);
     checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_DelH_sign");
-    
+    */
 
     // Launch a kernel on the GPU with one thread for each element.
-    metropolisKernel <<<1, block_size >>> (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, exchange_attempts, T);
+    //metropolisKernel <<<1, block_size >>> (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, exchange_attempts, T);
 
-    cudaStatus = cudaGetLastError();
-    checkErrorCuda(cudaStatus, "prepareMetropolisKernel launch failed : !");
     
-
+    
+    /*
     // Check for any errors launching the kernel
     cudaStatus = cudaGetLastError();
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "prepareMetropolisKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
         goto Error;
-    }
+    }*/
 
+    /*
     // cudaDeviceSynchronize waits for the kernel to finish, and returns
     // any errors encountered during the launch.
     cudaStatus = cudaDeviceSynchronize();
@@ -209,6 +350,8 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
         goto Error;
     }
 
+
+    
     // Copy output vector from GPU buffer to host memory.
     cudaMemcpy(H, dev_H, lenY * sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(DelHGpu, dev_DelH, lenY * lenY * sizeof(double), cudaMemcpyDeviceToHost);
@@ -220,23 +363,23 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
 
     cudaStatus = cudaMemcpy(DelH_sign, dev_DelH_sign, lenY * sizeof(int), cudaMemcpyDeviceToHost);
     checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_DelH_sign -> DelH_sign");
+    */
 
-    cout << " \t\t\t Best Energy: " << bestEnergy << endl;
     
-Error:
-    cudaFree(dev_H);
+    /*cudaFree(dev_H);
     cudaFree(dev_DelH);
     cudaFree(dev_DelH_sign);
     cudaFree(dev_W);
+    cudaFree(dev_B);
     cudaFree(dev_Y);
     cudaFree(dev_E);
     cudaFree(dev_Selected_index);
     cudaFree(dev_bestSpinModel);
     cudaFree(dev_bestenergy);
-
+    
 
     return cudaStatus;
-
+    */
 
 }
 /* ***************************************************************** */
