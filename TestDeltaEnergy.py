@@ -136,8 +136,10 @@ def testEveryThing(Q,x, L, printLog = True):
     E = energy(Q,x)
     Ed = E
     H = compute_H(Q,x)
+    print("H: ")
     print(H)
     Del_H2 = delta_H(Q, x)
+    print("DelH: ")
     print(Del_H2)
     for j in L:
         Logstr = "bit "
@@ -219,6 +221,8 @@ x = np.array([random.randint(0, 1) for _ in range(5)])  # Example binary configu
 x = np.array([0,0,0,0,0])
 L = random_numbers = [random.randint(0, len(x)-1) for _ in range(10)]
 L = [0,0,0,0,0,4, 1, 3]
+
+L = [3,3,2]
 testEveryThing(Q,x, L, printLog = True)
 
 ###############################################################################

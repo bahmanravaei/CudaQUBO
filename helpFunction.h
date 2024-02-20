@@ -74,9 +74,27 @@ void printH(double* H, int lenH, string str) {
 }
 
 
+void printAllH(double** H, int row, int col) {
+    for (int i = 0; i < row; i++) {
+        string str = "H for replica " + to_string(i);
+        printH(H[i], col, str);
+    }
+}
 
 double* convert2Dto1D(double** array2D, int row, int col) {
     double* array1D = new double[row * col];
+    int index = 0;
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++) {
+            array1D[index] = array2D[i][j];
+            index++;
+        }
+    }
+    return array1D;
+}
+
+int* convert_int_2Dto1D(int** array2D, int row, int col) {
+    int* array1D = new int[row * col];
     int index = 0;
     for (int i = 0; i < row; i++) {
         for (int j = 0; j < col; j++) {
@@ -94,6 +112,12 @@ double** convert1Dto2D(double* array1D, double** array2D, int row, int col) {
         }
     }
     return array2D;
+}
+
+void fill1Darray(double* A, double fillWith, int size) {
+    for (int i = 0; i < size; i++) {
+        A[i] = fillWith;        
+    }
 }
 
 void fill2Darray(double** A, double fillWith, int row, int col) {
@@ -185,4 +209,19 @@ double** convertDelHtoGpuDelH(double*** DelH, int num_replicas, int lenY) {
     }
     return GpuDelH;
 }
+
+double* VectorizedDelH(double*** DelH, int num_replicas, int lenY) {
+    double* VectorDelH = new double [num_replicas* lenY*lenY];
+        
+
+    for (int r = 0; r < num_replicas; r++) {
+        for (int i = 0; i < lenY; i++) {
+            for (int j = 0; j < lenY; j++) {
+                VectorDelH[r*lenY* lenY + i * lenY + j] = DelH[r][i][j];
+            }
+        }
+    }
+    return VectorDelH;
+}
+
 

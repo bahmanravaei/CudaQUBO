@@ -11,3 +11,5 @@
 #define IsingMode               -1
 #define QUBOMode                0
 #define QUBOGPU                 1
+#define QUBOGPUFULL				2
+#define DEBUGFLAG				false

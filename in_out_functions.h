@@ -250,7 +250,7 @@ void recordLogs(string outputPath, double** M, double** E, int numberOfIteration
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
 void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp) {
-    std::ifstream fin("Settings.txt");
+    std::ifstream fin("setting.txt");
     std::string line;
     std::string Key, Value;
 
@@ -294,6 +294,8 @@ void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outpu
                     ExecuteMode = QUBOMode;
                 else if (Value == "QUBOGPU")
                     ExecuteMode = QUBOGPU;
+                else if (Value == "QUBOGPUFULL")
+                    ExecuteMode = QUBOGPUFULL;
                 else {
                     cout << "Error" << endl;
                     exit(-1);
