@@ -225,3 +225,50 @@ double* VectorizedDelH(double*** DelH, int num_replicas, int lenY) {
 }
 
 
+
+int findMinIndex(const double* array, int size) {
+    int index = -1;
+    if (size <= 0) {
+        // Handle invalid input
+        printf("Invalid array size\n");
+        return -1; // You can choose a sentinel value or use an error-handling mechanism
+    }
+
+    double min = array[0]; // Assume the first element is the maximum
+
+    for (int i = 1; i < size; ++i) {
+        if (array[i] < min) {
+            min = array[i];
+            index = i;
+        }
+    }
+
+    return index;
+}
+
+
+void unVectorData(int* vector_Y, int** Y, double* vector_E, double** E, int numberOfIteration, int number_replica, int lenY ) {
+
+    for (int i = 0; i < number_replica; i++) {
+        for (int j = 0; j < numberOfIteration; j++) {
+            E[i][j] = vector_E[i * numberOfIteration + j];
+        }
+        for (int k = 0; k < lenY; k++) {
+            Y[i][k] = vector_Y[i * lenY + k];
+        }
+    }
+
+}
+
+void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* Temperature) {
+    if (num_replicas != 1) {
+        for (int r = 0; r < num_replicas; r++) {
+            Temperature[r] = minTemp + r * (maxTemp - minTemp) / (num_replicas - 1);
+            cout << "Temperature: " << Temperature[r] << endl;
+        }
+    }
+    else {
+        Temperature[0] = minTemp;
+        cout << "Temperature: " << Temperature[0] << endl;
+    }
+}

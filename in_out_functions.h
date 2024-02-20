@@ -250,7 +250,7 @@ void recordLogs(string outputPath, double** M, double** E, int numberOfIteration
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
 void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp) {
-    std::ifstream fin("setting.txt");
+    std::ifstream fin("settings.txt");
     std::string line;
     std::string Key, Value;
 
