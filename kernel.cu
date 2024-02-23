@@ -97,12 +97,45 @@ __global__ void metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_
 //dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration
 __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_sign, int* dev_Y, int* dev_Selected_index, const int select_index_size, double* dev_E, int* dev_bestSpinModel, double* dev_best_energy, int numberOfIteration, int exchange_attempts, double* dev_Temprature)
 {   
+    extern __shared__ char sharedMemory[];
+
     int blockId = blockIdx.x;
     int threadId = threadIdx.x;
     int tid = blockId * blockDim.x + threadId;
     int temprature_index = blockId; 
     int temp_index_direction = (blockId+1) % 2;
     bool stop_flag = false;
+    double best_energy = dev_best_energy[blockId];
+
+    
+
+    // Define pointers to different shared memory segments
+    int* Shared_Y = (int*)sharedMemory;
+    int* Shared_bestSpinModel = (int*)(sharedMemory + (blockDim.x) * sizeof(int));
+    int* Shared_selected_index = (int*)(sharedMemory + 2 * (blockDim.x) * sizeof(int));
+
+    double* Shared_H = (double*)(sharedMemory + (select_index_size +2 * (blockDim.x)) * sizeof(int)); //
+    double* Shared_Temprature = (double*)(sharedMemory + (select_index_size + 2 * (blockDim.x)) * sizeof(int)+ (blockDim.x) * sizeof(double));
+
+    //double* Shared_DelH = (double*)(sharedMemory+blockDim.x*sizeof(double));
+    //double* Shared_E = (double*)(sharedMemory + (blockDim.x+1) * blockDim.x * sizeof(double));
+    
+    
+    Shared_Y[threadId] = dev_Y[tid];
+    Shared_bestSpinModel[threadId] = Shared_Y[threadId];
+    Shared_selected_index[threadId] = -1;
+    if (threadId + blockDim.x < select_index_size) {
+        Shared_selected_index[threadId + blockDim.x] = -1;
+    }
+
+    if (threadId < gridDim.x) {
+        Shared_Temprature[threadId] = dev_Temprature[threadId];
+    }
+
+    Shared_H[threadId] = dev_H[tid];
+
+    __syncthreads();
+     
 
 
     int index_base = select_index_size* blockId;
@@ -119,74 +152,95 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     }
 
     curandState state;
+    curand_init(clock64(), tid, clock64(), &state);
 
     for (int step = 1; step < numberOfIteration; step++) {
             
             //compute Delata energy
-            double deltaE = -1 * (1 - 2 * dev_Y[tid]) * dev_H[tid];
-                
+            //double deltaE = -1 * (1 - 2 * dev_Y[tid]) * dev_H[tid];
+            double deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
+            
+            
 
             // Make decision that a bit flip can be accepted
-            curand_init(clock64(), tid, clock64(), &state);
-
-            if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / dev_Temprature[temprature_index]))) {
-                dev_Selected_index[index_base+threadId] = threadId;
+            
+            if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / Shared_Temprature[temprature_index]))) {
+                //dev_Selected_index[index_base+threadId] = threadId;
+                Shared_selected_index[threadId] = threadId;
             }
             else {
-                dev_Selected_index[index_base + threadId] = -1;
+                //dev_Selected_index[index_base + threadId] = -1;
+                Shared_selected_index[threadId] = -1;
             }
-            //__syncthreads();
 
+            __syncthreads();
+            
             // select which bit accepted            
             for (int s = select_index_size / 2; s > 0; s >>= 1)
             {
                 if (threadId < s)
                 {
-                    //printf("\tblockId: %d \t threadId: %d \t index_base + threadId: %d \t index_base + threadId+s: %d\n", blockId, threadId, index_base + threadId, index_base + threadId + s);
-                    if (dev_Selected_index[index_base + threadId] != -1 && dev_Selected_index[index_base + threadId + s] != -1)
+                    //printf("\tblockId: %d \t threadId: %d \t  threadId +s: %d\n", blockId, threadId, threadId + s);
+                    //if (dev_Selected_index[index_base + threadId] != -1 && dev_Selected_index[index_base + threadId + s] != -1)
+                    if (Shared_selected_index[threadId] != -1 && Shared_selected_index[threadId + s] != -1)
                     {
                         // Generate a random integer (0 or 1)
 
                         if ((curand(&state) & 1) == 1) //find the least significant bit
-                            dev_Selected_index[index_base + threadId] = dev_Selected_index[index_base + threadId + s];
-                    }
-                    else if (dev_Selected_index[index_base + threadId] == -1 && dev_Selected_index[index_base + threadId + s] != -1) {
-                        dev_Selected_index[index_base + threadId] = dev_Selected_index[index_base + threadId + s];
+                            Shared_selected_index[threadId] = Shared_selected_index[threadId + s];
+                            //dev_Selected_index[index_base + threadId] = dev_Selected_index[index_base + threadId + s];
+                            
+                    }else if (Shared_selected_index[threadId] == -1 && Shared_selected_index[threadId + s] != -1) {
+                        //else if (dev_Selected_index[index_base + threadId] == -1 && dev_Selected_index[index_base + threadId + s] != -1) {
+                        //dev_Selected_index[index_base + threadId] = dev_Selected_index[index_base + threadId + s];
+                        Shared_selected_index[threadId] = Shared_selected_index[threadId + s];
                     }
                 }
                 __syncthreads();
             }
 
+            
             __syncthreads();
 
             
             // based on the flipped bit j update parameters
-            int j = dev_Selected_index[index_base];
-
+            int j = Shared_selected_index[0];
+            
             if (threadId == j) {
 
-                dev_Y[tid] = 1 - dev_Y[tid];
+                //dev_Y[tid] = 1 - dev_Y[tid];
+                Shared_Y[threadId] = 1 - Shared_Y[threadId];
+
                 dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
-                if (dev_E[blockId * numberOfIteration + step] < dev_best_energy[blockId]) {
-                    dev_best_energy[blockId] = dev_E[blockId * numberOfIteration + step];
-                    dev_bestSpinModel[tid] = dev_Y[tid];
+                //if (dev_E[blockId * numberOfIteration + step] < dev_best_energy[blockId]) {
+                //    dev_best_energy[blockId] = dev_E[blockId * numberOfIteration + step];
+                if (dev_E[blockId * numberOfIteration + step] < best_energy) {
+                    best_energy = dev_E[blockId * numberOfIteration + step];
+                    //dev_bestSpinModel[tid] = dev_Y[tid];
+                    Shared_bestSpinModel[threadId] = Shared_Y[threadId];
                 }              
             }else if(j==-1 && threadId==0){
                 // Log the Energy when there is not any bit to flip
                 dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1];
             }
             __syncthreads();
+            
+
+            
 
             if (j != -1) {
                 //Update H                  (dev_DelH : replica * lenY * lenY)
-                dev_H[tid] = dev_H[tid] + dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j];
+                //dev_H[tid] = dev_H[tid] + dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j];
+                
+                
+                Shared_H[threadId] = Shared_H[threadId] + dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j];
                 // Update delta_H
                 dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j] *= -1;
             }         
 
             __syncthreads();
             
-
+            
             if (step % exchange_attempts == 0) {
                 if (stop_flag == false) {
                     
@@ -208,6 +262,10 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             //}
         }
     //}
+    
+    dev_best_energy[blockId] = best_energy;
+    dev_Y[tid] = Shared_Y[threadId];
+    dev_bestSpinModel[tid] = Shared_bestSpinModel[threadId];
 }
 
 
@@ -493,13 +551,26 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
     cudaStatus = allocateMemory_with_size(&dev_H, &dev_DelH, &dev_W, &dev_B, &dev_E, &dev_bestSpinModel, &dev_Y, &dev_Selected_index, &dev_lenY, &dev_DelH_sign, &dev_bestenergy, &dev_Temprature, memory_size);
 
     cudaStatus = copyMemoryFromHostToDevice_with_size(vector_H, dev_H, vector_DelH, dev_DelH, vector_DelH_sign, dev_DelH_sign, WGpu, dev_W, vector_Y, dev_Y, vector_E, dev_E, bestEnergy, dev_bestenergy, bestSpinModel, dev_bestSpinModel, dev_Selected_index, dev_Temprature, Temperature, memory_size);
+
     
     // Launch a kernel on the GPU with one thread for each element.
-    full_mode_metropolisKernel << <replica, lenY >> > (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, select_index_size, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration, exchange_attempts, dev_Temprature);
+    int size_of_shared_Memory = (2 * lenY + select_index_size)* sizeof(int) + (lenY+ replica) * sizeof(double);
+    //int size_of_shared_Memory = (2 * (lenY)+select_index_size) * sizeof(int) + (replica + ((lenY + 1) * lenY) + numberOfIteration) * sizeof(double);
+    printf("size_of_shared_Memory : %d \n", size_of_shared_Memory);
     
+    // Start recording time
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    
+    full_mode_metropolisKernel << <replica, lenY , size_of_shared_Memory >> > (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, select_index_size, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration, exchange_attempts, dev_Temprature);
+    
+
+
     // Check for any errors launching the kernel
     cudaStatus = cudaGetLastError();
-    checkErrorCuda(cudaStatus, "prepareMetropolisKernel launch failed : !");
+    checkErrorCuda(cudaStatus, "prepare_full_MetropolisKernel launch failed : !");
 
     // cudaDeviceSynchronize waits for the kernel to finish, and returns
     // any errors encountered during the launch.
@@ -509,6 +580,18 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
         cout << cudaGetErrorString(cudaStatus) << endl;;
         goto Error;
     }
+    
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    // Calculate and print the elapsed time
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time elapsed: %f ms\n", milliseconds);
+
+    // Cleanup events
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
 
 
