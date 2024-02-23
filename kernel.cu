@@ -104,6 +104,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     int temp_index_direction = (blockId+1) % 2;
     bool stop_flag = false;
 
+
     int index_base = select_index_size* blockId;
     
     if (temp_index_direction==0) {
@@ -177,7 +178,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             __syncthreads();
 
             if (j != -1) {
-                //Update H                  ( dev_DelH : replica * lenY * lenY)
+                //Update H                  (dev_DelH : replica * lenY * lenY)
                 dev_H[tid] = dev_H[tid] + dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j];
                 // Update delta_H
                 dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j] *= -1;
