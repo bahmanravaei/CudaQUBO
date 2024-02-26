@@ -20,6 +20,7 @@ __global__ void metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_
     //extern __shared__ int sdata[];
     curandState state;
 
+    curand_init(clock64(), tid, clock64(), &state);
     if (tid < dev_lenY) {
         for (int step = 1; step < exchange_attempts; step++) {
             
@@ -29,7 +30,7 @@ __global__ void metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_
             
 
             // Make decision that a bit flip can be accepted
-            curand_init(clock64(), tid, clock64(), &state);
+            
             
             if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / T))) {
                 dev_Selected_index[tid] = tid;
