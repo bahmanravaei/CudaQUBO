@@ -227,7 +227,7 @@ double* VectorizedDelH(double*** DelH, int num_replicas, int lenY) {
 
 
 int findMinIndex(const double* array, int size) {
-    int index = -1;
+    int index = 0;
     if (size <= 0) {
         // Handle invalid input
         printf("Invalid array size\n");
@@ -235,12 +235,13 @@ int findMinIndex(const double* array, int size) {
     }
 
     double min = array[0]; // Assume the first element is the maximum
-
+    //cout << "best energy for replica: 0 = " << array[0] << endl;
     for (int i = 1; i < size; ++i) {
         if (array[i] < min) {
             min = array[i];
             index = i;
         }
+        //cout << "best energy for replica: " << i << " = " << array[i] << endl;
     }
 
     return index;

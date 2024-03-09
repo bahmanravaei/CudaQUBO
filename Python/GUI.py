@@ -7,17 +7,20 @@ Created on Fri Jan 12 20:38:40 2024
 
 
 import subprocess
+import my_utility_function as my_f
 
 import tkinter as tk
-from tkinter import filedialog
+#from tkinter import filedialog
 from tkinter import ttk
 from tkinter import messagebox
-from tkinter import PhotoImage
+#from tkinter import PhotoImage
 import os
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
-from PIL import Image, ImageTk
+#from PIL import Image, ImageTk
+import MaxCutToIsing as maxCut
+import constant as ct
 
 
 def toggle_visibility(column_index, figure):
@@ -73,33 +76,12 @@ def draw_chart(output_dir, window):
     canvas.draw()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-def relative_path_(user_path):
-    current_directory = os.getcwd()
-    user_path = os.path.abspath(user_path)  # Convert to absolute path for accurate comparison
-    
-    # Check if the user path is a subdirectory of the current directory
-    if user_path.startswith(current_directory):
-        #print(f"{user_path} is a subdirectory of {current_directory}")
-        relative_path = os.path.relpath(user_path, current_directory)
-        return relative_path
-    else:
-        #print(f"{user_path} is not a subdirectory of {current_directory}")
-        return user_path
 
 
-def browse_file(entry):
-    filename = filedialog.askopenfilename()
-    filename= relative_path_(filename)
-        
-    entry.delete(0, tk.END)
-    entry.insert(0, filename)
 
 
-def browse_directory(entry):
-    directory = filedialog.askdirectory()
-    directory= relative_path_(directory)
-    entry.delete(0, tk.END)
-    entry.insert(0, directory)
+
+
 
 #def toggle_state0(*args):
 #    if var.get() == 1:
@@ -166,7 +148,7 @@ def assign_value(entry, value_to_assign):
     entry.insert(0, value_to_assign)
 
 
-def save_info(execute_setting_button, exchange_attempts_entry, number_of_iteration_entry, size_of_vector_entry, input_a_entry, input_b_entry, ising_or_qubo_var, num_replicas_entry, min_temp_entry, max_temp_entry, output_dir_entry):
+def save_info(exchange_attempts_entry, number_of_iteration_entry, size_of_vector_entry, input_a_entry, input_b_entry, ising_or_qubo_var, num_replicas_entry, min_temp_entry, max_temp_entry, output_dir_entry):
     print("In save_info")
     
     
@@ -208,7 +190,6 @@ def save_info(execute_setting_button, exchange_attempts_entry, number_of_iterati
         for key, value in info.items():
             f.write(f"{key}: {value}\n")
     
-    execute_setting_button.config(state=tk.NORMAL)
             
     return
 #    info = {
@@ -236,7 +217,7 @@ def validate_int(value):
 
 
 
-def show_new_settings (execute_setting_button, cuda_info, edit_flag=False):
+def show_new_settings (cuda_info, edit_flag=False):
     new_window = tk.Toplevel(root)
     #new_window=tk.Tk()
     
@@ -245,7 +226,7 @@ def show_new_settings (execute_setting_button, cuda_info, edit_flag=False):
     #label.pack()
     
     new_window.geometry("600x300")
-    set_background_image(new_window)
+    my_f.set_background_image(new_window)
 
     tk.Label(new_window, text="Size Of Vector").grid(row=1, column=0)
     size_of_vector_entry = tk.Entry(new_window)
@@ -259,7 +240,7 @@ def show_new_settings (execute_setting_button, cuda_info, edit_flag=False):
     input_a_entry.grid(row=2, column=1)
 
     #browse_button = tk.Button(new_window, text="Browse", command=browse_file)
-    browse_button = tk.Button(new_window, text="Browse", command=lambda: browse_file(input_a_entry))
+    browse_button = tk.Button(new_window, text="Browse", command=lambda: my_f.browse_file(input_a_entry))
     browse_button.grid(row=2, column=2)
 
     
@@ -275,7 +256,7 @@ def show_new_settings (execute_setting_button, cuda_info, edit_flag=False):
     input_b_entry = tk.Entry(new_window, state= tk.DISABLED)
     input_b_entry.grid(row=3, column=2)
 
-    browse_button = tk.Button(new_window, text="Browse", command=lambda: browse_file(input_b_entry))
+    browse_button = tk.Button(new_window, text="Browse", command=lambda: my_f.browse_file(input_b_entry))
     #browse_button = tk.Button(new_window, text="Browse", command=browse_file)
     browse_button.grid(row=3, column=3)
     
@@ -326,10 +307,10 @@ def show_new_settings (execute_setting_button, cuda_info, edit_flag=False):
     output_dir_entry = tk.Entry(new_window)
     output_dir_entry.grid(row=10, column=1)
 
-    browse_button_3 = tk.Button(new_window, text="Browse", command=lambda: browse_directory(output_dir_entry))
+    browse_button_3 = tk.Button(new_window, text="Browse", command=lambda: my_f.browse_directory(output_dir_entry))
     browse_button_3.grid(row=10, column=2)
 
-    save_button = tk.Button(new_window, text="Save Info", command=lambda: save_info(execute_setting_button, exchange_attempts_entry, number_of_iteration_entry, size_of_vector_entry, input_a_entry, input_b_entry, ising_or_qubo_var, num_replicas_entry, min_temp_entry, max_temp_entry, output_dir_entry))
+    save_button = tk.Button(new_window, text="Save Info", command=lambda: save_info(exchange_attempts_entry, number_of_iteration_entry, size_of_vector_entry, input_a_entry, input_b_entry, ising_or_qubo_var, num_replicas_entry, min_temp_entry, max_temp_entry, output_dir_entry))
     save_button.grid(row=11, column=1)
     
     
@@ -380,50 +361,26 @@ def show_table():
             # Insert the data into the treeview
             treeview.insert("", "end", text=key, values=(value,))
 
-def parse_device_query_log(log_file_path):
-    cuda_info = {
-        'num_devices': 0,
-        'total_global_memory': 0,
-        'max_threads_per_block': 0,
-        'total_shared_memory_per_block': 0
-    }
 
-    try:
-        with open(log_file_path, 'r') as log_file:
-            lines = log_file.readlines()
-
-            for line in lines:
-                # Check for lines containing relevant information
-                if 'Detected' in line and 'CUDA Capable device(s)' in line:
-                    cuda_info['num_devices'] = int(line.split()[1])
-                elif 'Total amount of global memory' in line:
-                    cuda_info['total_global_memory'] = int(line.split(':')[1].split()[0])
-                elif 'Maximum number of threads per block' in line:
-                    cuda_info['max_threads_per_block'] = int(line.split(':')[1].split()[0])
-                elif 'Total amount of shared memory per block' in line:
-                    cuda_info['total_shared_memory_per_block'] = int(line.split(':')[1].split()[0])
-
-    except FileNotFoundError:
-        print(f"Error: The specified log file '{log_file_path}' was not found.")
-    except Exception as e:
-        print(f"Error while parsing log file: {e}")
-
-    return cuda_info
-
-def run_deviceQuery(exe_path, output_file_path):
-    print("Run deviceQuery")
-
-    try:
-        with open(output_file_path, 'w') as output_file:
-            subprocess.run(exe_path, check=True, stdout=output_file, stderr=subprocess.STDOUT)
-        print("deviceQuery executed! Output saved to log.txt")
-    except subprocess.CalledProcessError as e:
-        print(f"Error: {e}")
-    except FileNotFoundError:
-        print(f"Error: The specified .exe file '{exe_path}' was not found.")
-    return
+def convert_to_string(a_dictionary):
+    print(a_dictionary)
+    string = ""
+    for key, value in a_dictionary.items():
+        string += key + ": " + str(value) + "\n"
+    return string
 
 def run_qubo(analyze_button):
+    if is_settings_file_exists("settings.txt")==False:
+        print("Can not find the seetings.txt file !")
+        messagebox.showinfo("Alert","Can not find the seetings.txt file !")
+        return
+    
+    info_settings = read_info(file_path="settings.txt")
+    
+    setting_in_string_format = convert_to_string(info_settings)
+    messagebox.showinfo("Alert", setting_in_string_format)
+    
+    
     print ("run QUBO")
     exe_path = 'CudaQUBO.exe'
     try:
@@ -457,76 +414,100 @@ def analyze():
     draw_chart(output_dir, root)
     return
 
+
+
+
+def convert_Frame(root):
+    # Define some functions to covert different Graph Problem in QUBO or Ising
+    convert_frame = tk.Frame(root, bd=2, relief=tk.GROOVE, highlightthickness=2, highlightbackground="black")
+    convert_frame.grid(row=0, column=0, pady=10)  # Adjust pady as needed
+    
+    label1 = tk.Label(convert_frame, text="Which graph problem would you like to convert to QUBO or Ising?", font=("Helvetica", 12, "bold"))
+    label1.grid(row=0, column=0, columnspan=5, sticky='w', padx=(10, 0), pady=(0, 10))
+    
+    MaxCut_button = tk.Button(convert_frame, text="Maximum cut", command= lambda: my_f.convert_window(root, ct.MAXIMUM_CUT))
+    MaxCut_button.grid(row=1, column=0, pady=5)
+    
+    tsp_button = tk.Button(convert_frame, text="Traveling Salesman Problem (TSP)", command= lambda: my_f.convert_window(root, "TSP"), state=tk.DISABLED)
+    tsp_button.grid(row=1, column=1, pady=5)
+    
+    vertex_cover_button = tk.Button(convert_frame, text="Vertex Cover", command= lambda: my_f.convert_window(root, "VertexCover"), state=tk.DISABLED)
+    vertex_cover_button.grid(row=1, column=2, pady=5)
+    
+    Next_button = tk.Button(convert_frame, text="Next problem", command= lambda: my_f.convert_window(root, "Next"), state=tk.DISABLED)
+    Next_button.grid(row=1, column=3, pady=5)
+    
+
+def configuration_frame(root, row_position, cuda_info):
+  
+    config_frame = tk.Frame(root, bd=2, relief=tk.GROOVE, highlightthickness=2, highlightbackground="black")
+    config_frame.grid(row=row_position, column=0, pady=10)  # Adjust pady as needed
+
+    label1 = tk.Label(config_frame, text="Configure the system settings and then execute the QUBO solver!", font=("Helvetica", 12, "bold"))
+    label1.grid(row=0, column=0, columnspan=5, sticky='w', padx=(10, 0), pady=(0, 10))
+    
+    new_setting_button = tk.Button(config_frame, text="New Settings", command= lambda: show_new_settings(cuda_info))
+    new_setting_button.grid(row=1, column=1)
+  
+    edit_setting_button = tk.Button(config_frame, text="Edit Settings", command=lambda: show_new_settings(cuda_info,True))
+    edit_setting_button.grid(row=1, column=3)
+    
+
+def execute_frame(root, row_position, cuda_info):
+    
+    # Bottom Frame
+    exe_frame = tk.Frame(root, bd=2, relief=tk.GROOVE, highlightthickness=2, highlightbackground="black")
+    exe_frame.grid(row=row_position, column=0, pady=10)  # Adjust pady as needed
+
+    label1 = tk.Label(exe_frame, text="There Is at least one CUDA capable device on your system!", font=("Helvetica", 12, "bold"))
+    label1.grid(row=0, column=0, columnspan=5, sticky='w', padx=(10, 0), pady=(0, 10))
+    
+    execute_setting_button = tk.Button(exe_frame, text="Execute QUBO", command=lambda: run_qubo(analyze_button))
+    execute_setting_button.grid(row=1, column=1)
+    
+    analyze_button = tk.Button(exe_frame, text="Analyze the results", command=analyze, state='disabled')
+    #analyze_button = tk.Button(root, text="Analyze the results", command=analyze)
+    analyze_button.grid(row=1, column=3)
+    
+
 def main():
 
     
-    exe_path = 'bin/deviceQuery.exe'
-    output_file_path = 'bin/log.txt'
+    # Convert Frame
+    convert_Frame(root)
     
-    run_deviceQuery(exe_path, output_file_path)
-    cuda_info = parse_device_query_log(output_file_path)
+    # execute the device query to gather information about the GPU device
+    cuda_info = my_f.run_deviceQuery()
      
     if cuda_info['num_devices'] > 0:
-        # Top Frame
-        top_frame = tk.Frame(root)
-        top_frame.grid(row=0, column=0, pady=10)  # Adjust pady as needed
-
-        label1 = tk.Label(top_frame, text="There Is at least one CUDA Capable device on your system!")
-        label1.grid(row=0, column=0)
-
-        #tk.Label(root, text="There Is at least one CUDA Capable device on your system!").grid(row=1, column=2)
-        #show_table_button = tk.Button(root, text="Show Table", command=show_table(root))
-        #show_table_button.grid(row=1, column=1)
         
-        #save_button = tk.Button(root, text="Edit Setting", command=save_info)
-        #save_button.grid(row=11, column=1)
-        # Bottom Frame
-        bottom_frame = tk.Frame(root)
-        bottom_frame.grid(row=1, column=0, pady=10)  # Adjust pady as needed
-
-        new_setting_button = tk.Button(bottom_frame, text="New Settings", command= lambda: show_new_settings(execute_setting_button, cuda_info))
-        new_setting_button.grid(row=0, column=0)
+        # Configuration Frame
+        row_position = 1
+        configuration_frame(root, row_position, cuda_info)
         
-        #new_setting_button = tk.Button(root, text="New Settings", command=show_new_settings)
-        #new_setting_button.grid(row=2, column=1)
+        # Execute Frame
+        row_position = 2
+        execute_frame(root, row_position, cuda_info)
+  
+    
         
-        edit_setting_button = tk.Button(bottom_frame, text="Edit Settings", command=lambda: show_new_settings(execute_setting_button, cuda_info,True))
-        edit_setting_button.grid(row=3, column=2)
-        
-        execute_button_state = "disabled"
-        if is_settings_file_exists("settings.txt"):
-            execute_button_state = "normal"
-        
-        execute_setting_button = tk.Button(bottom_frame, text="Execute QUBO", command=lambda: run_qubo(analyze_button), state=execute_button_state)
-        execute_setting_button.grid(row=4, column=3)
-        
-        analyze_button = tk.Button(bottom_frame, text="Analyze the results", command=analyze, state='disabled')
-        #analyze_button = tk.Button(root, text="Analyze the results", command=analyze)
-        analyze_button.grid(row=5, column=4)
     else:
          tk.Label(root, text="Can Not Find any CUDA Capable device on your system!").grid(row=1, column=2)       
             
             
 
-def set_background_image(window):
-    # Replace 'background_image.png' with the path to your image file
-    image_path = 'nucleus02.png'
-    
-    # Create a PhotoImage object from the image file
-    background_image = PhotoImage(file=image_path)
 
-    # Set the image as the window background
-    background_label = tk.Label(window, image=background_image)
-    background_label.place(relwidth=1, relheight=1)
-
-    # Ensure the image is not garbage collected
-    window.image = background_image
 
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("quantum inspired QUBO")
     root.geometry("600x300")
-    set_background_image(root)
+    
+    # Configure the columns and rows to center the window
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
+    
+    my_f.set_background_image(root)
     
     main()
     

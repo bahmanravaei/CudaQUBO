@@ -7,6 +7,22 @@ Created on Tue Dec 12 11:18:42 2023
 
 import numpy as np
 from itertools import product
+import sys
+
+#import tkinter as tk
+#import my_utility_function as my_f
+#from tkinter import filedialog
+#from tkinter import ttk
+#from tkinter import messagebox
+#from tkinter import PhotoImage
+#import os
+#from matplotlib.figure import Figure
+#from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+#import pandas as pd
+#from PIL import Image, ImageTk
+#import MaxCutToIsing as maxCut
+
+
 
 def max_cut_to_qubo(adjacency_matrix):
     """
@@ -99,13 +115,24 @@ def write_A_b_ToFile(J, outFilenameJ, h = [], outFilenameH=""):
 
 #--------------------------------------------------
 def fileGraphToArray(filename):
-    data = np.loadtxt(filename, delimiter = " ", skiprows=1)
-    data=data-1
-    maxNode = int(np.max(data)+1)
-    Arr = np.zeros((maxNode, maxNode))
-    for i in range(data.shape[0]):
-        Arr[int(data[i,0]),int(data[i,1])]=1
-        Arr[int(data[i,1]),int(data[i,0])]=1
+    #print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+    #print(filename)
+    #print("len file name: " + str(len(filename)))
+    try:
+        data = np.loadtxt(filename, delimiter = " ", skiprows=1)
+        #data=data-1
+        data[:, 0:2]-=1           # Start node index from 0: (1, n) => (0, n-1)
+        
+        maxNode = int(np.max(data[:, :2])+1)    # Finding the number of nodes
+        Arr = np.zeros((maxNode, maxNode))
+        for i in range(data.shape[0]):
+            Arr[int(data[i,0]),int(data[i,1])]=int(data[i,2])
+            Arr[int(data[i,1]),int(data[i,0])]=int(data[i,2])
+    except Exception as e:
+        
+        print(f"Error reading file: {e}")
+        #sys.exit()
+    
     
     return Arr
     
@@ -120,10 +147,10 @@ def testEnergyEvaluation(Q, X, Flag, b = np.array([])):
     E = np.dot(np.dot(X, Q),XBar)
 
     if(len(b)!=0):
-        print("\t\t\t\t\t Energy: " + str(E)+ " + " +str(np.dot(X,b)))
+        #print("\t\t\t\t\t Energy: " + str(E)+ " + " +str(np.dot(X,b)))
 
         E = E + np.dot(X,b)
-        print("\t\t\t testEnergyEvaluation: " + str(E))
+        #print("\t\t\t testEnergyEvaluation: " + str(E))
     
     #print(X)
     #print(XBar)
@@ -150,26 +177,55 @@ def generate_coin_toss_outcomes(n, isingFlag):
     return np_outcome
 
 #--------------------------------------------------
-def testForallScenarios(Q, n, Flag=False, isingFlag=False , B = []):
-    ## Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
-    n=5
+def test_for_all_bits_configuration(Q, n=5, Flag=False, isingFlag=False , B = []):
+    """
+    
+    Parameters
+    ----------
+    Q : Coupling or Adjacency Matrix
+        if Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
+    n : int, optional
+        size of graph or matrix. The default is 5.
+    Flag : bool, optional
+        Qubo (True) or graph (False). The default is False.
+    isingFlag : bool, optional
+        Qubo or Ising. The default is False.
+    B : 1-D List, optional
+        The bias array. The default is [].
+
+    Returns
+    -------
+    L : List
+        List of all bit configuration and their energy.
+
+    """
+    ## 
+    #n=5
     all_X=generate_coin_toss_outcomes(n,isingFlag)
     L=[]
     optimaValue=0
+    if(Flag):
+        if(isingFlag==True):
+            print("Best bits configuration and Energy, when the Q is adjacency Matrix and Ising problem:")
+        else:
+            print("Best bits configuration and Energy, when the Q is adjacency Matrix (QUBO problem):")
+    else:
+        print("Best bits configuration and Energy, when the Q is adjacency Matrix of graph:")
+    
     for item in all_X:
-        res=testEnergyEvaluation(Q,item, Flag, b = B)
-        if (optimaValue<=res):
-            print(item, res)
-            optimaValue=res
-        L.append((item,res))
+        energy_value=testEnergyEvaluation(Q,item, Flag, b = B)
+        if (optimaValue<=energy_value):
+            print("\t" , item, energy_value)
+            optimaValue=energy_value
+        L.append((item,energy_value))
     
     return L
     
 #--------------------------------------------------
 def convertGraphToIsing(out_filename_A, in_filename="", graph_adjacency_matrix=[], out_filename_b="", convertMode="Ising"):
     if (in_filename!=""):
-        
         graph_adjacency_matrix = fileGraphToArray(in_filename)
+        
     elif(len(graph_adjacency_matrix)==0):
         print("****   ERROR   ****")
         return 
@@ -196,91 +252,134 @@ def convertGraphToIsing(out_filename_A, in_filename="", graph_adjacency_matrix=[
             
 #--------------------------------------------------
 ###############################################################################   
-filename=["g05_100.0","g05_100.1","g05_100.2","g05_100.3",
-          "g05_100.4","g05_100.5","g05_100.6","g05_100.7",
-          "g05_100.8","g05_100.9"]
-
-in_path="Files/"
-out_path = "maxCut/"
-for file in filename:
-    convertGraphToIsing(out_path + file + "Q", in_filename=in_path + file, convertMode="QUBO")
+def test1():
+    filename=["g05_100.0","g05_100.1","g05_100.2","g05_100.3",
+              "g05_100.4","g05_100.5","g05_100.6","g05_100.7",
+              "g05_100.8","g05_100.9"]
     
-
-"Files/maxCutAg05_100.0.txt", "Files/maxCutBg05_100.0.txt"            
-
-###############################################################################
-## Codes for after executing the C code for Ising model
-fileNameGraph = "maxCutGraph/g05_100.0"
-graph_adjacency_matrix = fileGraphToArray(fileNameGraph)
-Q=graph_adjacency_matrix
-filename="Files/latticeFinal.csv"
-aCut = np.loadtxt(filename, delimiter = ",")
-
-bestFoundCut=np.array(
-      [1., 1., 1., 1., 0., 1., 1., 0., 1., 1., 0., 0., 0., 0., 0., 0., 0.,
-       0., 0., 1., 0., 1., 1., 1., 0., 1., 1., 0., 1., 1., 1., 0., 1., 0.,
-       1., 0., 1., 0., 1., 0., 1., 1., 1., 0., 1., 0., 1., 0., 0., 1., 1.,
-       0., 1., 0., 0., 0., 1., 1., 1., 0., 0., 1., 0., 0., 0., 1., 0., 1.,
-       1., 1., 0., 0., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 1., 1., 0.,
-       1., 1., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 1.])
-
-E=testEnergyEvaluation(Q, bestFoundCut, False)
-## Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
+    in_path="Files/"
+    out_path = "maxCut/"
+    for file in filename:
+        convertGraphToIsing(out_path + file + "Q", in_filename=in_path + file, convertMode="QUBO")
+        
+    
+    #"Files/maxCutAg05_100.0.txt", "Files/maxCutBg05_100.0.txt"            
 
 ###############################################################################
+## Codes for after executing the C code and findig the best configuration
+fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/maxCut_n10_e18_res74.csv"
+best_cut_file = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/QUBO/latticeBest.csv"
 
-filename="Files/brock200-1.mtx"
-filename="Files/g05_100.0"
+fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/maxCut_n20_e38_res271.csv"
+best_cut_file = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/QUBO/latticeBest.csv"
+
+fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/maxCutGraph/g05_100.4"
+
+def test_energy_of_a_configuration(fileNameGraph, best_cut_file):
+    """
+
+    Parameters
+    ----------
+    fileNameGraph : Path to graph file
+        DESCRIPTION.
+    best_cut_file : Path to a configuration of bits
+        DESCRIPTION.
+
+    Returns
+    -------
+    Find energy.
+
+    """
+    #fileNameGraph = "maxCutGraph/g05_100.0"
+    graph_adjacency_matrix = fileGraphToArray(fileNameGraph)
+    Q=graph_adjacency_matrix
+    
+    aCut = np.loadtxt(best_cut_file, delimiter = ",")
+    """
+    """
+    E=testEnergyEvaluation(Q, aCut, False)
+    return E
+    ## Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
+
+###############################################################################
+def test3():
+    filename="Files/brock200-1.mtx"
+    filename="Files/g05_100.0"
 
 
 ###############################################################################
 #                  Code for test the correctness of program
 # Example usage:
 # Define the adjacency matrix of the graph
-graph_adjacency_mat = np.array([[0, -10, 5, 8, -6],
-                                   [-10, 0, -3, 0, 4],
-                                   [5, -3, 0,  -5, 0],
-                                   [8, 0, -5, 0, -8],
-                                   [-6, 4, 0, -8, 0]])
-
-out_filename_A = "SimpleTest/IsingSimpleA00.txt"
-convertGraphToIsing(out_filename_A, graph_adjacency_matrix=graph_adjacency_mat, convertMode="Ising")
-
-out_filename_A = "SimpleTest/IsingSimpleA01.txt"
-filename_b = "SimpleTest/IsingSimpleb01.txt"
-convertGraphToIsing(out_filename_A, graph_adjacency_matrix=graph_adjacency_mat, out_filename_b=filename_b, convertMode="Ising")
-
-
-
-out_filename_Q = "SimpleTest/QUBOSimpleQ.txt"
-convertGraphToIsing(out_filename_Q, graph_adjacency_matrix=graph_adjacency_mat, convertMode="QUBO")
+def test4():
+    graph_adjacency_mat = np.array([[0, -10, 5, 8, -6],
+                                       [-10, 0, -3, 0, 4],
+                                       [5, -3, 0,  -5, 0],
+                                       [8, 0, -5, 0, -8],
+                                       [-6, 4, 0, -8, 0]])
+    
+    out_filename_A = "SimpleTest/IsingSimpleA00.txt"
+    convertGraphToIsing(out_filename_A, graph_adjacency_matrix=graph_adjacency_mat, convertMode="Ising")
+    
+    out_filename_A = "SimpleTest/IsingSimpleA01.txt"
+    filename_b = "SimpleTest/IsingSimpleb01.txt"
+    convertGraphToIsing(out_filename_A, graph_adjacency_matrix=graph_adjacency_mat, out_filename_b=filename_b, convertMode="Ising")
+    
+    
+    
+    out_filename_Q = "SimpleTest/QUBOSimpleQ.txt"
+    convertGraphToIsing(out_filename_Q, graph_adjacency_matrix=graph_adjacency_mat, convertMode="QUBO")
 
 ###############################################################################
 
 # Example usage:
 # Define the adjacency matrix of the graph
-graph_adjacency_mat = np.array([[0, -10, 5, 8, -6],
-                                   [-10, 0, -3, 0, 4],
-                                   [5, -3, 0,  -5, 0],
-                                   [8, 0, -5, 0, -8],
-                                   [-6, 4, 0, -8, 0]])
+def test_maxCut_and_QUBO_of_graph(file_name, print_flag=False):
+    """
+    Test All bits configuration under different condition (Graph, Qubo, Ising)
+    and print the best energy during the evaluation.
+    It seems it works for all cases, !!!!!!     EXCEPT ONE CASE     !!!!!
+    Parameters
+    ----------
+    file_name : string
+        Path to a file that contains the adjacency of a graph.
+        
+    print_flag: bool
+        flag for print (True) 
+    """
+    
+    
+    graph_adjacency_mat = fileGraphToArray(file_name)
+    #return graph_adjacency_mat
+    n = len(graph_adjacency_mat)            #size of adjacency matrix (n * n)
+    resMaxCut=test_for_all_bits_configuration(graph_adjacency_mat, n , Flag=False)   # It is a maximization problem
+    if(print_flag==True):
+        print("All bit configuration max Cut (As a maximization problem): ")
+        print(resMaxCut)
+    
+    # Convert to QUBO model
+    Q = max_cut_to_qubo(graph_adjacency_mat)
+    #print(Q)
+    resQUBO=test_for_all_bits_configuration(Q, n, Flag=True)                         # It is a maximization problem
+    if(print_flag==True):
+        print("All bit configuration max Cut (As a maximization problem): ")
+        print(resMaxCut)
 
-resMaxCut=testForallScenarios(graph_adjacency_mat, 5, Flag=False)   # It is a maximization problem
+    
+    # Convert to Ising model
+    h, J = max_cut_to_ising(graph_adjacency_mat)
+    
+    resIsing_1=test_for_all_bits_configuration(J, n, Flag=True, isingFlag=False, B = h)
+    resIsing_1=test_for_all_bits_configuration(J, n, Flag=True, isingFlag=True, B = h)
+    
+    
+    # For testing energy in Ising model
+    for i in range(len(h)):
+        J[i,i]=h[i]
+    
+    resIsing_2=test_for_all_bits_configuration(J, n, Flag=True, isingFlag=True)      # It is a maximization problem
+       
 
-# Convert to QUBO model
-Q = max_cut_to_qubo(graph_adjacency_mat)
-resQUBO=testForallScenarios(Q,5, Flag=True)                         # It is a maximization problem
+###############################################################################
 
-
-# Convert to Ising model
-h, J = max_cut_to_ising(graph_adjacency_mat)
-resIsing_1=testForallScenarios(J,5, Flag=True, isingFlag=False, B = h)
-resIsing_1=testForallScenarios(J,5, Flag=True, isingFlag=True, B = h)
-
-
-# For testing energy in Ising model
-for i in range(len(h)):
-    J[i,i]=h[i]
-
-resIsing_2=testForallScenarios(J,5, Flag=True, isingFlag=True)      # It is a maximization problem
 
