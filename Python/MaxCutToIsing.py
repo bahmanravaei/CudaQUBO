@@ -274,7 +274,7 @@ fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/maxCut_n20_e38
 best_cut_file = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/QUBO/latticeBest.csv"
 
 fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/maxCutGraph/g05_100.4"
-
+fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/maxCutGraph/ising2.5-100_5555.bq.txt"
 def test_energy_of_a_configuration(fileNameGraph, best_cut_file):
     """
 

@@ -227,7 +227,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 *shared_best_energy = dev_E[blockId * numberOfIteration + step];
                 //dev_bestSpinModel[tid] = dev_Y[tid];
                 Shared_bestSpinModel[threadId] = Shared_Y[threadId];
-                //printf("\treplica: %d, bestEnergy %lf \n", blockId, *shared_best_energy);
+                //if(threadId==0) printf("\treplica: %d, bestEnergy %lf \n", blockId, *shared_best_energy);
             }
             
 
@@ -269,13 +269,13 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     dev_best_energy[blockId] = *shared_best_energy;
     dev_Y[tid] = Shared_Y[threadId];
     dev_bestSpinModel[tid] = Shared_bestSpinModel[threadId];
-    if (tid == 0) {
+    /*if (tid == 0) {
         printf("best Configuration:\t");
         for (int ii = 0; ii < blockDim.x; ii++) {
             printf("%d, ", Shared_bestSpinModel[ii]);
         }
         printf("\n **** replica: %d, bestEnergy %lf \n", blockId, dev_best_energy[blockId]);
-    }
+    }*/
 }
 
 
@@ -871,6 +871,7 @@ int main()
     string Bfile = "";              //      file path for Bias (B) in Ising (QUBO) model 
     string outputPath = "";          //     The path to the directory to save the output 
     int ExecuteMode = QUBOMode;     //      Execution mode: IsingMode or QUBOMode
+    int debug_mode = NO_DEBUG;
 
     /*      Read the setting file and initialize the parameters    */
     readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, minTemp, maxTemp);

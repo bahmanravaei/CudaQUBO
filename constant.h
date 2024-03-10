@@ -13,3 +13,8 @@
 #define QUBOGPU                 1
 #define QUBOGPUFULL				2
 #define DEBUGFLAG				false
+#define NO_DEBUG				0
+#define DEBUG_LVL_1				1
+#define DEBUG_LVL_2				2
+#define DEBUG_LVL_3				3
+#define DEBUG_LVL_4				4
