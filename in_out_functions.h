@@ -246,10 +246,52 @@ void recordLogs(string outputPath, double** M, double** E, int numberOfIteration
     writeSpinInFile(bestSpinModel, lenX, Lsqrt, outputPath + "\\latticeBest.csv");
 }
 
+void print_log_host(const char* action, int step, int temprature_index, int replicaIindex, int bitIndex, double previousEnergy, double deltaE, double newEnergy, double H, double del_H, int flipped_bit, int index_del_h) {
+    // Use printf for printing within host functions
+    //return;
+    //char buffer[500];
+    //sprintf(buffer, "%d, %d, %d, %d, %s, %lf, %lf, %lf, %lf, %lf, %d, %d\n", step, replicaIindex, bitIndex, action, previousEnergy, deltaE, newEnergy, H, del_H, flipped_bit, index_del_h);
 
+    std::cout << step << "," << replicaIindex << "," << temprature_index << "," << bitIndex << "," << action << "," << previousEnergy << "," << deltaE << "," << newEnergy << "," << H << "," << del_H << "," << flipped_bit << "," << index_del_h<<endl;
+}
+
+
+int setDebugMode(string value) {
+    int debugMode = 0;
+    if (value == "DEBUG_RANDOM_FLIP") {
+        debugMode = DEBUG_RANDOM_FLIP;
+    }else if (value == "DEBUG_SELECTED_FLIP") {
+        debugMode = DEBUG_SELECTED_FLIP;
+    }
+    else if (value == "DEBUG_FIND_BEST_ENERGY") {
+        debugMode = DEBUG_FIND_BEST_ENERGY;
+    }
+    else if (value == "DEBUG_UPDATE_H") {
+        debugMode = DEBUG_UPDATE_H;
+    }
+    else if (value == "DEBUG_EXCHANGE") {
+        debugMode = DEBUG_EXCHANGE;
+    }
+    else if (value == "DEBUG_SAVE_DEVICE_RESULT") {
+        debugMode = DEBUG_SAVE_DEVICE_RESULT;
+    }
+    else if (value == "DEBUG_DELTA_FLIP") {
+        debugMode = DEBUG_DELTA_FLIP;
+    }
+    else if (value == "DEBUG_INIT_CONFIG") {
+        debugMode = DEBUG_INIT_CONFIG;
+    }
+    else if (value == "DEBUG_SAVE_W_MATRIX") {
+        debugMode = DEBUG_SAVE_W_MATRIX;
+    }
+
+    
+    return debugMode;
+
+}
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
-void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp) {
+void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp, int& debug_mode) {
     std::ifstream fin("settings.txt");
     std::string line;
     std::string Key, Value;
@@ -300,6 +342,10 @@ void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outpu
                     cout << "Error" << endl;
                     exit(-1);
                 }
+            }
+            else if (Key == "debugMode:") {
+                stringStream1 >> Value;
+                debug_mode = debug_mode | setDebugMode(Value);
             }
         }
     }

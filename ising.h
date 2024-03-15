@@ -138,15 +138,40 @@ double** initW(int lenX, int lenMat, int Flag, string Wfile) {
 
 
 // Calculate the energy of spin state X based on interconnection W and bias B
-double energy(double** W, double* B, int* X, int lenX) {
+double energy(double** W, double* B, int* X, int lenX, int debug_mode) {
     double E = 0;
     for (int i = 0; i < lenX; i++) {
         for (int j = 0; j < lenX; j++) {
             E += W[i][j] * X[i] * X[j];
         }
+        
         E = E + B[i] * X[i];
     }
-    //cout<<"Energy: "<<-E<<endl;
+
+    //cout<<" \n Energy: "<<-E<<endl;
+    //cin >> x_in;
+
+    if ((debug_mode & DEBUG_SAVE_W_MATRIX) != 0) writeMatrixToFile("debug\\W.csv", W, lenX);
+    return -E;
+}
+
+double energy_version2(double** W, double* B, int* X, int lenX, int debug_mode) {
+    double E = 0;
+    for (int i = 0; i < lenX; i++) {
+        double tempE = 0;
+        for (int j = 0; j < lenX; j++) {
+            //E += W[i][j] * X[i] * (1-X[j]);
+            tempE += X[j] * W[i][j];
+        }
+        E += tempE * X[i];
+
+        E = E + B[i] * X[i];
+    }
+
+    //cout<<" \n Energy: "<<-E<<endl;
+    //cin >> x_in;
+
+    if ((debug_mode & DEBUG_SAVE_W_MATRIX) != 0) writeMatrixToFile("debug\\W.csv", W, lenX);
     return -E;
 }
 

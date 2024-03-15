@@ -152,9 +152,9 @@ void print2D_arr_double(double** D, int lenRow, int lenCol) {
 	std::cout << "] " << endl;
 }
 
-bool testEveryThing(double** Q, double* C, int* X, int* List, int lenList, int lenX) {
+bool testEveryThing(double** Q, double* C, int* X, int* List, int lenList, int lenX, int debug_mode) {
     bool Flag = true;
-    double E = energy(Q, C, X, lenX);
+    double E = energy(Q, C, X, lenX, debug_mode);
     double Ed = E;
     double* H = new double[lenX];
     computeH(Q, C, H, X, lenX);
@@ -171,7 +171,7 @@ bool testEveryThing(double** Q, double* C, int* X, int* List, int lenList, int l
         double Del_E = deltaEnergyQUBO(Q, X, j, H);
         X[j] = 1 - X[j];
         Logstr = Logstr + "/\t E: " + to_string(E) + " -> ";
-        E = energy(Q, C, X, lenX);
+        E = energy(Q, C, X, lenX, debug_mode);
         Logstr = Logstr + to_string(E);
         Ed = Energy_based_Delta(Ed, Del_E);
         Logstr = Logstr + " Ed: " + to_string(Ed);
@@ -188,10 +188,10 @@ bool testEveryThing(double** Q, double* C, int* X, int* List, int lenList, int l
 }
 
 
-void testHamiltonianPreparation(double** Q, double* C, int lenX) {
+void testHamiltonianPreparation(double** Q, double* C, int lenX, int debug_mode) {
     int X[] = { 0,0,0,0,0 };
     int List[] = { 0, 0, 0, 0, 0, 4, 1, 3 };
-    bool Flag = testEveryThing(Q, C, X, List, 8, lenX);
+    bool Flag = testEveryThing(Q, C, X, List, 8, lenX, debug_mode);
     cout << Flag << endl;
 
 }
@@ -263,6 +263,7 @@ void unVectorData(int* vector_Y, int** Y, double* vector_E, double** E, int numb
 
 void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* Temperature) {
     if (num_replicas != 1) {
+        //cout << " \t intitTemperature ---- minTemp: " << minTemp << " \t maxTemp: " << maxTemp << endl;
         for (int r = 0; r < num_replicas; r++) {
             Temperature[r] = minTemp + r * (maxTemp - minTemp) / (num_replicas - 1);
             cout << "Temperature: " << Temperature[r] << endl;

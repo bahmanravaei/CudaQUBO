@@ -48,7 +48,7 @@ def max_cut_to_qubo(adjacency_matrix):
             Q[i, j] = - adjacency_matrix[i, j]
         
         #print(R)
-        Q[i, i] = R
+        Q[i, i] = R - adjacency_matrix[i,i]
         
     return Q
 
@@ -150,7 +150,7 @@ def testEnergyEvaluation(Q, X, Flag, b = np.array([])):
         #print("\t\t\t\t\t Energy: " + str(E)+ " + " +str(np.dot(X,b)))
 
         E = E + np.dot(X,b)
-        #print("\t\t\t testEnergyEvaluation: " + str(E))
+        #print("\t\t\t testEnergyEvaluat...: " + str(E))
     
     #print(X)
     #print(XBar)
@@ -252,15 +252,19 @@ def convertGraphToIsing(out_filename_A, in_filename="", graph_adjacency_matrix=[
             
 #--------------------------------------------------
 ###############################################################################   
-def test1():
-    filename=["g05_100.0","g05_100.1","g05_100.2","g05_100.3",
-              "g05_100.4","g05_100.5","g05_100.6","g05_100.7",
-              "g05_100.8","g05_100.9"]
+filenames = ["ising2.5-100_5555.txt", "ising2.5-100_5555_edited.bq"]
+#filename=["g05_100.0","g05_100.1","g05_100.2","g05_100.3",
+#          "g05_100.4","g05_100.5","g05_100.6","g05_100.7",
+#          "g05_100.8","g05_100.9"]
+
+in_path="testFile/"
+out_path = "testFile/"
+convertMode="QUBO"
+def convert_graph_files_to_Ising(filenames, in_path, out_path, convertMode):
     
-    in_path="Files/"
-    out_path = "maxCut/"
-    for file in filename:
-        convertGraphToIsing(out_path + file + "Q", in_filename=in_path + file, convertMode="QUBO")
+    
+    for file in filenames:
+        convertGraphToIsing(out_path + file + "Q", in_filename=in_path + file, convertMode = convertMode)
         
     
     #"Files/maxCutAg05_100.0.txt", "Files/maxCutBg05_100.0.txt"            
@@ -275,16 +279,17 @@ best_cut_file = "C:/Users/bahman/source/repos/CudaQUBO/SimpleTest/QUBO/latticeBe
 
 fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/maxCutGraph/g05_100.4"
 fileNameGraph = "C:/Users/bahman/source/repos/CudaQUBO/maxCutGraph/ising2.5-100_5555.bq.txt"
-def test_energy_of_a_configuration(fileNameGraph, best_cut_file):
+def test_energy_of_a_configuration(fileNameGraph, cut_file, Flag):
     """
 
     Parameters
     ----------
     fileNameGraph : Path to graph file
         DESCRIPTION.
-    best_cut_file : Path to a configuration of bits
+    cut_file : Path to a configuration of bits
         DESCRIPTION.
-
+    Flag :  bool
+        Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
     Returns
     -------
     Find energy.
@@ -294,17 +299,58 @@ def test_energy_of_a_configuration(fileNameGraph, best_cut_file):
     graph_adjacency_matrix = fileGraphToArray(fileNameGraph)
     Q=graph_adjacency_matrix
     
-    aCut = np.loadtxt(best_cut_file, delimiter = ",")
+    aCut = np.loadtxt(cut_file, delimiter = ",")
     """
     """
-    E=testEnergyEvaluation(Q, aCut, False)
+    E=testEnergyEvaluation(Q, aCut, Flag)
     return E
     ## Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
 
 ###############################################################################
-def test3():
-    filename="Files/brock200-1.mtx"
-    filename="Files/g05_100.0"
+number_of_replica = 10
+list_of_cut_file = ["Excel/Initlattice"+str(i)+".csv" for i in range(number_of_replica)]
+list_of_cut_file.append("Excel/latticeBest.csv")
+[list_of_cut_file.append("Excel/latticeFinal"+str(i)+".csv") for i in range(number_of_replica)]
+
+fileNameGraph = "testFile/ising2.5-100_5555_with_loop.gr"
+fileName_Q = "testFile/ising2.5-100_5555_with_loop.gr.Q"
+fileNameGraph2 = "testFile/ising2.5-100_5555_with_loop.gr"
+fileName_Q2 = "testFile/ising2.5-100_5555_with_loop.gr.Q"
+
+fileName_Q_or_graph = [fileName_Q, fileNameGraph, fileName_Q2, fileNameGraph2]
+
+a_cut = "testFile/bestSolution.csv"
+list_of_cut_file.append(a_cut)
+
+fileName_Q = "testFile/maxCut_n_5_e_res_8Q.txt"
+fileNameGraph = "testFile/maxcut_simple_graph_q_in_book.q"
+
+fileName_Q = "testFile/maxCutmaxCut_n10_e18_res74.csv.Q"
+fileNameGraph = "testFile/maxCut_n10_e18_res74.csv"
+
+fileName_Q = "testFile/maxCutmaxCut_n20_e38_res271.csv.Q"
+fileNameGraph = "testFile/maxCut_n20_e38_res271.csv"
+
+fileName_Q = "testFile/g05_100.0Q"
+fileNameGraph = "testFile/g05_100.0"
+
+FlagList = [True, False]
+
+fileName_Q_or_graph = [fileName_Q, fileNameGraph]
+
+def test_calculate_energy_of_cut_list(fileName_Q_or_graph, list_of_cut_file, FlagList):
+    # Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
+    print("|Trace\t|\t\tQ\t\t|\t\tG\t\t|")
+    print("___________________________________________")
+    print("|\t\t|\tT\t|\tF\t|\tT\t|\tF\t|")
+    print("___________________________________________")
+    
+    for filename in list_of_cut_file:
+        for file_of_matrix in fileName_Q_or_graph:
+            for Flag in FlagList:
+                E = test_energy_of_a_configuration(file_of_matrix, filename, Flag)
+                print(file_of_matrix, filename, Flag, E)
+        print("___________________________________________")
 
 
 ###############################################################################
