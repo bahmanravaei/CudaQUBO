@@ -308,9 +308,11 @@ def test_energy_of_a_configuration(fileNameGraph, cut_file, Flag):
 
 ###############################################################################
 number_of_replica = 10
+list_of_cut_file = []
 list_of_cut_file = ["Excel/Initlattice"+str(i)+".csv" for i in range(number_of_replica)]
-list_of_cut_file.append("Excel/latticeBest.csv")
 [list_of_cut_file.append("Excel/latticeFinal"+str(i)+".csv") for i in range(number_of_replica)]
+list_of_cut_file.append("Excel/latticeBest.csv")
+
 
 fileNameGraph = "testFile/ising2.5-100_5555_with_loop.gr"
 fileName_Q = "testFile/ising2.5-100_5555_with_loop.gr.Q"
