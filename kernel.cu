@@ -898,11 +898,15 @@ int main()
     string outputPath = "";          //     The path to the directory to save the output 
     int ExecuteMode = QUBOMode;     //      Execution mode: IsingMode or QUBOMode
     int debug_mode = NO_DEBUG;
+    int problem_type = NORMAL;
 
     /*      Read the setting file and initialize the parameters    */
-    readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, minTemp, maxTemp, debug_mode);
+    readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, minTemp, maxTemp, debug_mode, problem_type);
     cout << "DEBUG_MODE" << debug_mode<<endl;
-    if (debug_mode != NO_DEBUG) {
+    cout << "problem_type: " << problem_type << endl;
+
+    
+    if (debug_mode != NO_DEBUG && debug_mode<= ALL_DEBUG_ADMIN) {
         std::cout << "step" << "," << "replica (blockId)" << "," << "Temprature Index" << "," << "bitIndex" << "," << "action" << "," << "previousEnergy" << "," << "deltaE" << "," << "newEnergy" << "," << "H" << "," << "del_H" << "," << "flipped_bit" << "," << "index_del_h" << endl;
     }
     //cout << "L: " << L << " Lsqrt: " << Lsqrt << " Afile: " << Afile << " Bfile: " << Bfile << " ExecuteMode: " << ExecuteMode << " num_replicas: " << num_replicas << " numberOfIteration: " << numberOfIteration << " exchange_attempts: " << exchange_attempts << endl;
@@ -929,17 +933,20 @@ int main()
 
     //Initalize the interconnection of spins
     double** A;
-    A = initW(L, Lsqrt, ReadDataFromFile, Afile);
+    A = initW(L, Lsqrt, ReadDataFromFile, Afile, problem_type);
     //writeMatrixToFile(outputPath + "\\WInit.csv", A, L);
 
+    normalize_optimization_problem(problem_type, A, B, L);
+    B = initB(L, FillWithZero, "");
     // Log all the initial spin states
-    writeSpinsInFile(num_replicas, X, L, Lsqrt, outputPath, "Initlattice");
+    if ((debug_mode & DEBUG_INIT_CONFIG) == DEBUG_INIT_CONFIG)
+        writeSpinsInFile(num_replicas, X, L, Lsqrt, outputPath, "Initlattice");
 
     // Optimization Function
     ising(ExecuteMode, A, B, X, L, M, E, T, num_replicas, numberOfIteration, exchange_attempts, bestSpinModel, minTemp, maxTemp, debug_mode);
 
     //  Record Logs: Magnet, Energy, final spin states, and best spin model
-    recordLogs(outputPath, M, E, numberOfIteration, num_replicas, L, Lsqrt, X, bestSpinModel);
+    recordLogs(outputPath, M, E, numberOfIteration, num_replicas, L, Lsqrt, X, bestSpinModel, debug_mode);
 
     return 0;
 }

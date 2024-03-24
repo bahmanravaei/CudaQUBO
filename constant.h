@@ -13,6 +13,13 @@
 #define QUBOGPU                 1
 #define QUBOGPUFULL				2
 #define DEBUGFLAG				false
+
+#define NORMAL					0
+#define NONSYMETRIC				1
+#define UPPER_TRIANGULAR		2
+#define WITH_BIAS				4
+
+
 /* 
 Debug print format:
 step, blockId, threadId, action, Energy, deltaE
@@ -25,6 +32,12 @@ step, blockId, threadId, action, Energy, deltaE
 #define DEBUG_EXCHANGE				16
 #define DEBUG_SAVE_DEVICE_RESULT	32
 #define DEBUG_DELTA_FLIP			64
+#define ALL_DEBUG_ADMIN			127
 #define DEBUG_INIT_CONFIG			128
 #define DEBUG_SAVE_W_MATRIX			256
+#define DEBUG_WARNNING_AND_INFO		512
+#define DEBUG_FINAL_CONFIG			1024
+#define DEBUG_ENERGY_RECORD_LOG		2048
+#define DEBUG_MAGNET_RECORD_LOG		4096
+
 

@@ -121,14 +121,14 @@ void ReadVector(double* B, string Bfile) {
     {
         B[i] = element;
         i++;
-
-        //std::cout << element << std::endl;
+        
+        //std::cout << i<<": " << element << std::endl;
     }
 }
 
 
 
-void ReadWFromFile(double** W, string Wfile) {
+void ReadWFromFile(double** W, string Wfile, int problem_type) {
     std::ifstream fin(Wfile);
     //std::vector<int> data;
     int node, edge;
@@ -146,7 +146,9 @@ void ReadWFromFile(double** W, string Wfile) {
             //cout << line << "\n";
             stringstream stringStream2(line);
             stringStream2 >> index1 >> index2 >> weight;
-            W[index2 - 1][index1 - 1] = W[index1 - 1][index2 - 1] = weight;
+            if ((problem_type & NONSYMETRIC)== NONSYMETRIC) W[index1 - 1][index2 - 1] = weight;
+            else { W[index2 - 1][index1 - 1] = W[index1 - 1][index2 - 1] = weight; }
+                
             //cout << line << endl;
             //cout << "(" << index1 << "," << index2 << ")" << W[index2-1][index1-1] << " " << W[index1-1][index2-1] << " " << weight << endl;
 
@@ -232,12 +234,14 @@ bool createFolder(string folderName) {
 
 
 
-void recordLogs(string outputPath, double** M, double** E, int numberOfIteration, int num_replicas, int lenX, int Lsqrt, int** X, int* bestSpinModel) {
+void recordLogs(string outputPath, double** M, double** E, int numberOfIteration, int num_replicas, int lenX, int Lsqrt, int** X, int* bestSpinModel, int debug_mode) {
 
-    writeListToFile(outputPath + "\\Magnet.csv", M, numberOfIteration, num_replicas);
-    writeListToFile(outputPath + "\\Energy.csv", E, numberOfIteration, num_replicas);
-
-    writeSpinsInFile(num_replicas, X, lenX, Lsqrt, outputPath, "latticeFinal");
+    if ((debug_mode & DEBUG_MAGNET_RECORD_LOG) == DEBUG_MAGNET_RECORD_LOG)
+        writeListToFile(outputPath + "\\Magnet.csv", M, numberOfIteration, num_replicas);
+    if ((debug_mode& DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
+        writeListToFile(outputPath + "\\Energy.csv", E, numberOfIteration, num_replicas);
+    if ((debug_mode& DEBUG_FINAL_CONFIG) == DEBUG_FINAL_CONFIG)
+        writeSpinsInFile(num_replicas, X, lenX, Lsqrt, outputPath, "latticeFinal");
 
     //writeSpinInFile(X[0], lenX, Lsqrt, outputPath + "\\latticeFinal.csv");
 
@@ -253,6 +257,21 @@ void print_log_host(const char* action, int step, int temprature_index, int repl
     //sprintf(buffer, "%d, %d, %d, %d, %s, %lf, %lf, %lf, %lf, %lf, %d, %d\n", step, replicaIindex, bitIndex, action, previousEnergy, deltaE, newEnergy, H, del_H, flipped_bit, index_del_h);
 
     std::cout << step << "," << replicaIindex << "," << temprature_index << "," << bitIndex << "," << action << "," << previousEnergy << "," << deltaE << "," << newEnergy << "," << H << "," << del_H << "," << flipped_bit << "," << index_del_h<<endl;
+}
+
+
+
+int set_problem_type(string value) {
+    int problem_type = 0;
+    if (value == "NONSYMETRIC") {
+        problem_type = NONSYMETRIC;
+    }else if (value == "UPPER_TRIANGULAR") {
+        problem_type = UPPER_TRIANGULAR;
+    }
+    else if (value == "WITH_BIAS") {
+        problem_type = WITH_BIAS;
+    }
+    return problem_type;
 }
 
 
@@ -284,14 +303,25 @@ int setDebugMode(string value) {
     else if (value == "DEBUG_SAVE_W_MATRIX") {
         debugMode = DEBUG_SAVE_W_MATRIX;
     }
-
+    else if (value == "DEBUG_INIT_CONFIG") {
+        debugMode = DEBUG_INIT_CONFIG;
+    }
+    else if (value == "DEBUG_FINAL_CONFIG") {
+        debugMode = DEBUG_FINAL_CONFIG;
+    }
+    else if (value == "DEBUG_ENERGY_RECORD_LOG") {
+        debugMode = DEBUG_ENERGY_RECORD_LOG;
+    }
+    else if (value == "DEBUG_MAGNET_RECORD_LOG") {
+        debugMode = DEBUG_MAGNET_RECORD_LOG;
+    }
     
     return debugMode;
 
 }
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
-void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp, int& debug_mode) {
+void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
     std::ifstream fin("settings.txt");
     std::string line;
     std::string Key, Value;
@@ -306,14 +336,20 @@ void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outpu
 
             if (Key == "SizeOfVector:")
                 stringStream1 >> L;
+            else if (Key == "ProblemType:") {                
+                stringStream1 >> Value;
+                problem_type = problem_type | set_problem_type(Value);                                                
+            }            
             else if (Key == "Lsqrt:")
                 stringStream1 >> Lsqrt;
             //else if (Key == "InitialTemperature:")
             //    stringStream1 >> T;
             else if (Key == "InputA:")
                 stringStream1 >> Afile;
-            else if (Key == "InputB:")
+            else if (Key == "InputB:") {
                 stringStream1 >> Bfile;
+                problem_type = problem_type | WITH_BIAS;
+            }
             else if (Key == "outputDir:")
                 stringStream1 >> outputPath;
             else if (Key == "num_replicas:") {

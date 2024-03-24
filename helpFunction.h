@@ -274,3 +274,29 @@ void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* 
         cout << "Temperature: " << Temperature[0] << endl;
     }
 }
+
+void make_symmetric(double** W, int len_x) {
+    for(int i = 0; i < len_x; i++)
+        for (int j = i + 1; j < len_x; j++) {
+            double temp_w = (W[i][j] + W[j][i]) / 2;
+            W[i][j] = W[j][i] = temp_w;
+        }
+}
+
+void combine_bias(double** W, double* B, int len_x) {
+    for (int i = 0; i < len_x; i++) {
+        W[i][i] = W[i][i] + B[i];
+    }
+}
+
+void normalize_optimization_problem(int problem_type, double** W, double* B, int len_x) {
+    cout << "problem_type: " << problem_type << endl;
+    if ((problem_type & NONSYMETRIC) == NONSYMETRIC) {        
+        make_symmetric(W, len_x);
+        cout << "convert to symetric problem" << endl;
+    }
+    if ((problem_type & WITH_BIAS) == WITH_BIAS) {
+        combine_bias(W, B, len_x);
+        cout << "convert to without bias problem" << endl;
+    }
+}
