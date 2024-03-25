@@ -32,7 +32,7 @@ step, blockId, threadId, action, Energy, deltaE
 #define DEBUG_EXCHANGE				16
 #define DEBUG_SAVE_DEVICE_RESULT	32
 #define DEBUG_DELTA_FLIP			64
-#define ALL_DEBUG_ADMIN			127
+#define ALL_DEBUG_ADMIN				127
 #define DEBUG_INIT_CONFIG			128
 #define DEBUG_SAVE_W_MATRIX			256
 #define DEBUG_WARNNING_AND_INFO		512
