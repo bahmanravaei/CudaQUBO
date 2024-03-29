@@ -261,11 +261,18 @@ void unVectorData(int* vector_Y, int** Y, double* vector_E, double** E, int numb
 
 }
 
-void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* Temperature) {
+void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* Temperature, int program_config) {
+    
+    double next_temp;
     if (num_replicas != 1) {
         //cout << " \t intitTemperature ---- minTemp: " << minTemp << " \t maxTemp: " << maxTemp << endl;
         for (int r = 0; r < num_replicas; r++) {
-            Temperature[r] = minTemp + r * (maxTemp - minTemp) / (num_replicas - 1);
+            
+            if ((program_config & TEMPERATURE_GEOMETRIC) == TEMPERATURE_GEOMETRIC) {
+                next_temp = minTemp * pow((maxTemp / minTemp), (double)r / (num_replicas - 1));
+            }else
+                next_temp = minTemp + r * (maxTemp - minTemp) / (num_replicas - 1);
+            Temperature[r] = next_temp;
             cout << "Temperature: " << Temperature[r] << endl;
         }
     }

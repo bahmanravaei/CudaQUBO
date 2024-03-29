@@ -10,8 +10,14 @@ GRAPH_FILE      = "graph file"
 EXECUTE_MODE    = "execute mode"
 OUTPUT_FOLDER   = "output folder"
 PENALTY         = "penalty"
-QUBO            ="QUBO"
-ISING           ="ISING"
+QUBO            = "QUBO"
+ISING           = "ISING"
+problem_type    = "ProblemType"
+
+Temperature_init = "Temperature_init"
+Equidistant     = "Equidistant"
+Geometric       = "Geometric" 
+
 
 ABBREVATION = {
     MAXIMUM_CUT: 'maxCut'

@@ -759,7 +759,7 @@ double initEnergyAndMagnet(int num_replicas, double** W, double* B, int** Y, int
 
 
 
-double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y, int lenY, double** M, double** E, int* bestSpinModel, double bestEnergy, int numberOfIteration, int exchange_attempts, double minTemp, double maxTemp, int debug_mode) {
+double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y, int lenY, double** M, double** E, int* bestSpinModel, double bestEnergy, int numberOfIteration, int exchange_attempts, double minTemp, double maxTemp, int debug_mode, int program_config) {
     //double bestEnergy;
     //double* Temperature = new double[num_replicas];
     double** H = ComputeH_forAllReplica(num_replicas, W, B, Y, lenY);
@@ -773,7 +773,7 @@ double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y, int lenY,
     double* vector_W = convert2Dto1D(W, lenY, lenY);;
 
     double* Temperature = new double[num_replicas];
-    intitTemperature(num_replicas, minTemp, maxTemp, Temperature);
+    intitTemperature(num_replicas, minTemp, maxTemp, Temperature, program_config);
     bestEnergy = initEnergyAndMagnet(num_replicas, W, B, Y, lenY, M, E, bestSpinModel, debug_mode);
     cout << bestEnergy << endl;
 
@@ -800,7 +800,7 @@ double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y, int lenY,
 * M: record of Magnet in each iteration per replica
 * E: record of Energy in each iteration per replica
 */
-void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M, double** E, double T, int num_replicas, int numberOfIteration, int exchange_attempts, int* bestSpinModel, double minTemp, double maxTemp, int debug_mode) {
+void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M, double** E, double T, int num_replicas, int numberOfIteration, int exchange_attempts, int* bestSpinModel, double minTemp, double maxTemp, int debug_mode, int program_config) {
 
     double bestEnergy;
     double* Temperature = new double[num_replicas];
@@ -820,7 +820,7 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
     cout << "The best initial energy: " << bestEnergy << endl;
     if (ExecuteMode == QUBOGPUFULL) {
         //prepare_Full_GPU_Mode();
-        bestEnergy = full_GPU_Mode(num_replicas, W, B, Y, lenY, M, E, bestSpinModel, bestEnergy, numberOfIteration, exchange_attempts, minTemp, maxTemp, debug_mode);
+        bestEnergy = full_GPU_Mode(num_replicas, W, B, Y, lenY, M, E, bestSpinModel, bestEnergy, numberOfIteration, exchange_attempts, minTemp, maxTemp, debug_mode, program_config);
         return;
     }
     else if (ExecuteMode == QUBOGPU) {
@@ -831,8 +831,8 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int lenY, double** M
     }
     
     //initialize the Temperature array range
-    intitTemperature(num_replicas, minTemp, maxTemp, Temperature);
-
+    intitTemperature(num_replicas, minTemp, maxTemp, Temperature, program_config);
+    
     // Preperation of replica exchange parameters
     int exchangeFlag = 0;   // Flag to enable the exchange between neighbour replicas
     // Perform the Metropolis function numberOfIteration times for each replica 
@@ -901,7 +901,8 @@ int main()
     int problem_type = NORMAL;
 
     /*      Read the setting file and initialize the parameters    */
-    readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, minTemp, maxTemp, debug_mode, problem_type);
+    int program_config = readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, minTemp, maxTemp, debug_mode, problem_type);
+    cout << "program config" << program_config << endl;
     cout << "DEBUG_MODE" << debug_mode<<endl;
     cout << "problem_type: " << problem_type << endl;
 
@@ -943,7 +944,7 @@ int main()
         writeSpinsInFile(num_replicas, X, L, Lsqrt, outputPath, "Initlattice");
 
     // Optimization Function
-    ising(ExecuteMode, A, B, X, L, M, E, T, num_replicas, numberOfIteration, exchange_attempts, bestSpinModel, minTemp, maxTemp, debug_mode);
+    ising(ExecuteMode, A, B, X, L, M, E, T, num_replicas, numberOfIteration, exchange_attempts, bestSpinModel, minTemp, maxTemp, debug_mode, program_config);
 
     //  Record Logs: Magnet, Energy, final spin states, and best spin model
     recordLogs(outputPath, M, E, numberOfIteration, num_replicas, L, Lsqrt, X, bestSpinModel, debug_mode);

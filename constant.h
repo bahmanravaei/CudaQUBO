@@ -1,6 +1,8 @@
 #pragma once
 
 
+#define TEMPERATURE_GEOMETRIC	1
+
 
 //#define NumberOfIteration       10000
 #define ReadDataFromFile        3    

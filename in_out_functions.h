@@ -259,7 +259,15 @@ void print_log_host(const char* action, int step, int temprature_index, int repl
     std::cout << step << "," << replicaIindex << "," << temprature_index << "," << bitIndex << "," << action << "," << previousEnergy << "," << deltaE << "," << newEnergy << "," << H << "," << del_H << "," << flipped_bit << "," << index_del_h<<endl;
 }
 
+int set_program_config(string value) {
+    int program_config = 0;
+    if (value == "Geometric") {
+        program_config = TEMPERATURE_GEOMETRIC;
+    }
 
+
+    return program_config;
+}
 
 int set_problem_type(string value) {
     int problem_type = 0;
@@ -321,11 +329,11 @@ int setDebugMode(string value) {
 }
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
-void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
+int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
     std::ifstream fin("settings.txt");
     std::string line;
     std::string Key, Value;
-
+    int program_config = 0;
     if (fin.is_open()) {
 
         while (std::getline(fin, line)) {
@@ -339,7 +347,11 @@ void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outpu
             else if (Key == "ProblemType:") {                
                 stringStream1 >> Value;
                 problem_type = problem_type | set_problem_type(Value);                                                
-            }            
+            }
+            else if (Key == "Temperature_init:") {
+                stringStream1 >> Value;
+                program_config = program_config | set_program_config(Value);
+            }
             else if (Key == "Lsqrt:")
                 stringStream1 >> Lsqrt;
             //else if (Key == "InitialTemperature:")
@@ -386,5 +398,5 @@ void readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outpu
         }
     }
     fin.close();
-
+    return program_config;
 }

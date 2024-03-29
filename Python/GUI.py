@@ -171,7 +171,7 @@ def read_infoV2(file_path="settings.txt"):
         with open(file_path, "r") as f:
             for line in f:
                 key, value = line.strip().split(": ")
-                if key == "problemType":
+                if key == ct.problem_type:
                     flag_find_problem_type = True
                     if value == 'NONSYMETRIC':
                         value = 0
@@ -179,7 +179,7 @@ def read_infoV2(file_path="settings.txt"):
                     key, value = convert_key_for_debug(key, value)
                 info[key]=value
             if (flag_find_problem_type == False):
-                info["problemType"] = 1
+                info[ct.problem_type] = 1
     except FileNotFoundError:
         print(f"File not found: {file_path}")
     except Exception as e:
@@ -269,9 +269,9 @@ def convert_it_to_list(infoSave):
             if (value.get()==1):
                 index=int(key[9:])
                 info_as_list.append(["debugMode", debug_list[index]])
-        elif(key == 'problemType'):
+        elif(key == ct.problem_type):
             if (value.get()!=1):
-                info_as_list.append(["problemType", "NONSYMETRIC"])
+                info_as_list.append([ct.problem_type, "NONSYMETRIC"])
         else:
             info_as_list.append([key, value.get()])
         #if(key in get_item):
@@ -441,9 +441,15 @@ def show_new_settings (cuda_info, edit_flag=False):
     min_temp_entry = tk.Entry(frame_config)
     min_temp_entry.grid(row=7, column=1)
 
-    tk.Label(frame_config, text="Maximum Temperature").grid(row=8, column=0, sticky="w")
+    tk.Label(frame_config, text="Maximum Temperature").grid(row=7, column=2, sticky="w")
     max_temp_entry = tk.Entry(frame_config, state='disabled')
-    max_temp_entry.grid(row=8, column=1)
+    max_temp_entry.grid(row=7, column=3)
+    
+    tk.Label(frame_config, text="Initializing temperatures").grid(row=8, column=0, sticky="w")
+    init_temp_strategy_var = tk.StringVar(frame_config)
+    init_temp_strategy_var.set(ct.Equidistant)  # default value
+    init_temp_strategy_option = tk.OptionMenu(frame_config, init_temp_strategy_var, ct.Equidistant, ct.Geometric)
+    init_temp_strategy_option.grid(row=8, column=1)
 
     tk.Label(frame_config, text="Exchange attempts").grid(row=9, column=0, sticky="w")
     exchange_attempts_entry = tk.Entry(frame_config, state='disabled')
@@ -540,7 +546,8 @@ def show_new_settings (cuda_info, edit_flag=False):
               "exchange_attempts": exchange_attempts_entry,
               "NumberOfIteration": number_of_iteration_entry,
               "outputDir": output_dir_entry,
-              "problemType": checkbox_symmetric_var, 
+              ct.problem_type: checkbox_symmetric_var,
+              ct.Temperature_init: init_temp_strategy_var,
               "debugMode0": checkbox_log_random_flip_var,
               "debugMode1": checkbox_log_selected_flip_var,
               "debugMode2": checkbox_log_local_optima_energy_var,
