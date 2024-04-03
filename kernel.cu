@@ -158,20 +158,32 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
         //printf("blockId %d the stop_flag is on \n", blockId);
     }
 
+    double deltaE;
+    double random_double;
+    
+    //time: 0.63 ms
     curandState state;
+    // This part is time consuming, we should change it!!!> 162 ms
     curand_init(clock64(), tid, clock64(), &state);
-
+    
     for (int step = 1; step < numberOfIteration; step++) {
-            
+        // time : 754 ms
+        
             //compute Delata energy
-            //double deltaE = -1 * (1 - 2 * dev_Y[tid]) * dev_H[tid];
-            double deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
+            // Change shared_Y[tid] with a local variable    
+            deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
+            
+            //time:  8150 ms
             
             
 
             // Make decision that a bit flip can be accepted
             // Generate a random double nubmer
-            double random_double = curand_uniform_double(&state);
+            
+            //This part is realy time consuming and should be changed.
+            random_double = curand_uniform_double(&state);
+            //time : 105682 ms
+            
             
             //if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / Shared_Temprature[temprature_index]))) {
             if (deltaE < 0) {
@@ -190,7 +202,9 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 //printf("%d, %d, %d, %lf, %lf, %lf, %lf\n", step, blockId, threadId, random_double, 0, deltaE, exp(-deltaE / Shared_Temprature[temprature_index]));
             }
 
+            //time: same as previous
             __syncthreads();
+            // time: same as previous
             
             // select which bit accepted            
             for (int s = select_index_size / 2; s > 0; s >>= 1)
@@ -215,10 +229,12 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 }
                 __syncthreads();
             }
+            //time : almost same as previous part
+            
 
             
             __syncthreads();
-
+            
             
             // based on the flipped bit j update parameters
             int j = Shared_selected_index[0];
@@ -227,7 +243,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
                 //dev_Y[tid] = 1 - dev_Y[tid];
                 Shared_Y[threadId] = 1 - Shared_Y[threadId];
-
+                
+                //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
                 dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
 
                 if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("flipped", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, dev_E[blockId * numberOfIteration + step - 1] + deltaE, Shared_H[threadId], 0, j, -1);
@@ -238,6 +255,9 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step-1], Shared_H[threadId], 0, j, -1);
             }
             __syncthreads();
+
+            // tiem: almost same as previous part
+            
             
             //if (dev_E[blockId * numberOfIteration + step] < dev_best_energy[blockId]) {
             //dev_best_energy[blockId] = dev_E[blockId * numberOfIteration + step];
@@ -249,6 +269,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0 && threadId == 0) printLog("best energy", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step], 0, 0, j, -1);
             }
             
+            //time: almost same as previous part
 
             if (j != -1) {
                 //Update H                  (dev_DelH : replica * lenY * lenY)
@@ -264,6 +285,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             }         
 
             __syncthreads();
+            
+            //time: same as previous 
             
             
             if (step % exchange_attempts == 0) {
@@ -282,12 +305,15 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 }                   
             }
 
+            
+
             //if (threadId == 0 && bE != dev_best_energy[blockId]) {
             //    printf("S %d bE in block %d is %lf \n", step, blockId, dev_best_energy[blockId]);
             //    bE = dev_best_energy[blockId];
             //}
         }
     //}
+        return;
     if ((debug_mode & DEBUG_SAVE_DEVICE_RESULT) != 0 && threadId == 0) printLog("Final", numberOfIteration, temprature_index, blockId, threadId, dev_E[(blockId+1) * numberOfIteration - 1], 0, 0, 0, 0, -1, -1);
     dev_best_energy[blockId] = *shared_best_energy;
     dev_Y[tid] = Shared_Y[threadId];
