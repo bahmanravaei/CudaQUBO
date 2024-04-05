@@ -2,7 +2,7 @@
 
 
 #define TEMPERATURE_GEOMETRIC	1
-
+#define SEED_COEF				123456789
 
 //#define NumberOfIteration       10000
 #define ReadDataFromFile        3    
@@ -15,6 +15,7 @@
 #define QUBOGPU                 1
 #define QUBOGPUFULL				2
 #define DEBUGFLAG				false
+
 
 #define NORMAL					0
 #define NONSYMETRIC				1

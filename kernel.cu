@@ -100,6 +100,192 @@ __global__ void metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_
     }
 }
 
+
+__device__ unsigned int generate_random_int_v02(unsigned int* seed) {
+    unsigned int a = 1103515245;
+    unsigned int c = 12345;
+    unsigned int m = 2147483648;
+    *seed = (*seed * a + c);
+    return (*seed / 10);
+
+    //return (*seed) % m;
+}
+__device__ unsigned int generate_random_int_v01(unsigned int* seed) {
+    // LCG parameters
+    unsigned int a = 1664525;
+    unsigned int c = 1013904223;
+
+    // Update seed using LCG formula
+    *seed = (*seed * a + c) * UINT_MAX;
+    *seed = (*seed >> 1);
+    //printf("*seed: %u\n", *seed);
+    // Return the random number
+    return *seed;
+}
+
+__device__ double generateRandomDouble(double minVal, double maxVal, unsigned int* seed) {
+
+    // Generate random doubles
+    unsigned int a = 1664525;
+    unsigned int c = 1013904223;
+
+    // Update seed using LCG formula
+    *seed = (*seed * a + c);
+    // Generate random unsigned integer using LCG
+
+
+    // Map the random integer to a double value within the specified range
+    double randomDouble = minVal + ((maxVal - minVal) * (*seed)) / (double)(UINT_MAX);
+
+
+    return randomDouble;
+}
+
+__device__ void choise_between_two_bits(int threadId, int s, int* Shared_selected_index, unsigned int random_int) {
+    int b_flag;
+    int d_tid = Shared_selected_index[threadId]; int d_tid_s = Shared_selected_index[threadId + s];
+    if (d_tid == -1) {
+        Shared_selected_index[threadId] = d_tid_s;
+    } else if (d_tid_s != -1)
+    {
+        // Generate a random integer (0 or 1)
+        b_flag = (random_int & 1);
+        Shared_selected_index[threadId] = (b_flag * d_tid_s + (1 - b_flag) * d_tid);
+        /* the upper line is equivalent with the following code: */
+        /*if ((random_int & 1) == 1)//find the least significant bit
+            Shared_selected_index[threadId] = Shared_selected_index[threadId + s];*/
+    }
+}
+
+
+__device__ void warpReduce_to_select_a_bit(int* Shared_selected_index, unsigned int tid, int array_size, unsigned int random_int) {
+    //int random_int = *p_random_int;
+    
+    if (array_size >= 64) { 
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 32, Shared_selected_index, random_int); }
+    if (array_size >= 32) if (tid < 16) {
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 16, Shared_selected_index, random_int); }
+    if (array_size >= 16)if (tid < 8) {
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 8, Shared_selected_index, random_int);  }
+    if (array_size >= 8) if (tid < 4) {
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 4, Shared_selected_index, random_int);  }
+    if (array_size >= 4) if (tid < 2) {
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 2, Shared_selected_index, random_int);  }
+    if (array_size >= 2) if (tid < 1) {
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 1, Shared_selected_index, random_int);  }
+    //*p_random_int = random_int;
+}
+
+
+// reduce_to_select_a_bit is another version of function "select_flipping_bit"
+__device__ void reduce_to_select_a_bit(int* Shared_selected_index, unsigned int tid, int array_size, unsigned int random_int) {
+    //int random_int = *p_random_int;
+    //if (array_size >= 2048) { if (tid < 1024) {random_int = (random_int >> 1); flip_a_bit_between_pair(tid, 1024, Shared_selected_index, random_int); } __syncthreads(); }
+    if (array_size >= 1024) { if (tid < 512) { random_int = (random_int >> 1); choise_between_two_bits(tid, 512, Shared_selected_index, random_int); } __syncthreads(); }
+    if (array_size >= 512) { if (tid < 256) { random_int = (random_int >> 1); choise_between_two_bits(tid, 256, Shared_selected_index, random_int); } __syncthreads(); }
+    if (array_size >= 256) { if (tid < 128) { random_int = (random_int >> 1); choise_between_two_bits(tid, 128, Shared_selected_index, random_int); } __syncthreads(); }
+    if (array_size >= 128) { if (tid < 64) { random_int = (random_int >> 1); choise_between_two_bits(tid, 64, Shared_selected_index, random_int); } __syncthreads(); }
+    if (tid < 32) warpReduce_to_select_a_bit(Shared_selected_index, tid, array_size, random_int);
+    //*p_random_int = random_int;
+    __syncthreads();
+}
+
+__device__ void reduce_to_select_a_bit_v2(int* Shared_selected_index, unsigned int tid, int array_size, unsigned int random_int) {
+    int warp_array_size = array_size;
+    switch (array_size) {
+    case 2048:
+        if (tid < 1024) { random_int = (random_int >> 1); choise_between_two_bits(tid, 1024, Shared_selected_index, random_int); } __syncthreads();
+    case 1024:
+        if (tid < 512) { random_int = (random_int >> 1); choise_between_two_bits(tid, 512, Shared_selected_index, random_int); } __syncthreads();
+    case 512:
+        if (tid < 256) { random_int = (random_int >> 1); choise_between_two_bits(tid, 256, Shared_selected_index, random_int); } __syncthreads();
+    case 256:
+        if (tid < 128) { random_int = (random_int >> 1); choise_between_two_bits(tid, 128, Shared_selected_index, random_int); } __syncthreads();
+    case 128:
+        if (tid < 64) { random_int = (random_int >> 1); choise_between_two_bits(tid, 64, Shared_selected_index, random_int); } __syncthreads(); warp_array_size = 64;
+
+    
+    default:
+        
+        
+        switch (warp_array_size) {
+        case 64:
+            if (tid < 32) { random_int = (random_int >> 1); choise_between_two_bits(tid, 32, Shared_selected_index, random_int); }
+        case 32:
+            if (tid < 16) { random_int = (random_int >> 1); choise_between_two_bits(tid, 16, Shared_selected_index, random_int); }
+        case 16:
+            if (tid < 8) { random_int = (random_int >> 1); choise_between_two_bits(tid, 8, Shared_selected_index, random_int); }
+        case 8:
+            if (tid < 4) { random_int = (random_int >> 1); choise_between_two_bits(tid, 4, Shared_selected_index, random_int); }
+        case 4:
+            if (tid < 2) { random_int = (random_int >> 1); choise_between_two_bits(tid, 2, Shared_selected_index, random_int); }
+        case 2:
+            if (tid < 1) { random_int = (random_int >> 1); choise_between_two_bits(tid, 1, Shared_selected_index, random_int); }
+        }
+    
+    }
+    __syncthreads();
+}
+
+__device__  void select_flipping_bit_v2(int select_index_size, int threadId, int* Shared_selected_index, unsigned int random_int) {
+    int s = select_index_size >> 1;
+    for (; s > 32; s >>= 1)
+    {
+        if (threadId < s)
+        {
+            int b_flag;
+            int d_tid = Shared_selected_index[threadId]; int d_tid_s = Shared_selected_index[threadId + s];
+            if (d_tid == -1) {
+                Shared_selected_index[threadId] = d_tid_s;
+            }
+            else if (d_tid_s != -1)
+            {   // Generate a random integer (0 or 1)
+                random_int = random_int >> 1;
+                b_flag = (random_int & 1);
+                Shared_selected_index[threadId] = (b_flag * d_tid_s + (1 - b_flag) * d_tid);
+
+            }
+        }
+        __syncthreads();
+    }
+    if (threadId < 32) warpReduce_to_select_a_bit(Shared_selected_index, threadId, select_index_size, random_int);
+    __syncthreads();
+}
+
+__device__  void select_flipping_bit(int select_index_size, int threadId, int* Shared_selected_index, unsigned int random_int) {
+    int s = select_index_size >> 1;
+    for (; s > 0; s >>= 1)
+    {
+        if (threadId < s)
+        {
+            int b_flag;
+            int d_tid = Shared_selected_index[threadId]; int d_tid_s = Shared_selected_index[threadId + s];
+            if (d_tid == -1) {
+                Shared_selected_index[threadId] = d_tid_s;
+            }
+            else if (d_tid_s != -1)
+            {   // Generate a random integer (0 or 1)
+                random_int = random_int >> 1;
+                b_flag = (random_int & 1);
+                Shared_selected_index[threadId] = (b_flag * d_tid_s + (1 - b_flag) * d_tid);
+
+            }
+            /*
+            if (Shared_selected_index[threadId] != -1 && Shared_selected_index[threadId + s] != -1)
+            {
+                // Generate a random integer (0 or 1)
+                random_int = random_int >> 1;
+                if ((random_int & 1) == 1)//find the least significant bit
+                    Shared_selected_index[threadId] = Shared_selected_index[threadId + s];
+            }
+            else if (Shared_selected_index[threadId] == -1 && Shared_selected_index[threadId + s] != -1) {
+                Shared_selected_index[threadId] = Shared_selected_index[threadId + s];
+            }*/
+        }
+        __syncthreads();
+    }
+}
+
 //dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration
 __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_sign, int* dev_Y, int* dev_Selected_index, const int select_index_size, double* dev_E, int* dev_bestSpinModel, double* dev_best_energy, int numberOfIteration, int exchange_attempts, double* dev_Temprature, int debug_mode)
 {   
@@ -111,6 +297,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     int temprature_index = blockId; 
     int temp_index_direction = (blockId+1) % 2;
     bool stop_flag = false;
+    unsigned int seed =  (tid + 1) * SEED_COEF * clock64();;
     //double best_energy = dev_best_energy[blockId];
 
     
@@ -160,20 +347,21 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
     double deltaE;
     double random_double;
+    unsigned int random_int;
     
-    //time: 0.63 ms
-    curandState state;
-    // This part is time consuming, we should change it!!!> 162 ms
-    curand_init(clock64(), tid, clock64(), &state);
+    //point 1: time: 0.63 ms
+    //curandState state;
+    // point 2: This part is time consuming, we should change it!!!> 162 ms
+    //curand_init(clock64(), tid, clock64(), &state);
     
     for (int step = 1; step < numberOfIteration; step++) {
-        // time : 754 ms
+        //point3:  time : 754 ms
         
             //compute Delata energy
             // Change shared_Y[tid] with a local variable    
             deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
             
-            //time:  8150 ms
+            //point 4: time:  8150 ms
             
             
 
@@ -181,8 +369,14 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             // Generate a random double nubmer
             
             //This part is realy time consuming and should be changed.
-            random_double = curand_uniform_double(&state);
-            //time : 105682 ms
+            
+            //random_double = curand_uniform_double(&state);
+            random_double = generateRandomDouble(0, 1, &seed);
+            random_int = seed;
+            
+            //point 5: time : 105,682 ms
+                        
+            // time: 4,937 ms
             
             
             //if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / Shared_Temprature[temprature_index]))) {
@@ -201,40 +395,28 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 Shared_selected_index[threadId] = -1;
                 //printf("%d, %d, %d, %lf, %lf, %lf, %lf\n", step, blockId, threadId, random_double, 0, deltaE, exp(-deltaE / Shared_Temprature[temprature_index]));
             }
-
-            //time: same as previous
+            
+            //point 6: time: 30,517
+            
+            // This syncthread add around 3 seconds to execution time.       
             __syncthreads();
-            // time: same as previous
+            // point 7: time:  33,878
             
-            // select which bit accepted            
-            for (int s = select_index_size / 2; s > 0; s >>= 1)
-            {
-                if (threadId < s)
-                {
-                    //printf("\tblockId: %d \t threadId: %d \t  threadId +s: %d\n", blockId, threadId, threadId + s);
-                    //if (dev_Selected_index[index_base + threadId] != -1 && dev_Selected_index[index_base + threadId + s] != -1)
-                    if (Shared_selected_index[threadId] != -1 && Shared_selected_index[threadId + s] != -1)
-                    {
-                        // Generate a random integer (0 or 1)
 
-                        if ((curand(&state) & 1) == 1) //find the least significant bit
-                            Shared_selected_index[threadId] = Shared_selected_index[threadId + s];
-                            //dev_Selected_index[index_base + threadId] = dev_Selected_index[index_base + threadId + s];
-                            
-                    }else if (Shared_selected_index[threadId] == -1 && Shared_selected_index[threadId + s] != -1) {
-                        //else if (dev_Selected_index[index_base + threadId] == -1 && dev_Selected_index[index_base + threadId + s] != -1) {
-                        //dev_Selected_index[index_base + threadId] = dev_Selected_index[index_base + threadId + s];
-                        Shared_selected_index[threadId] = Shared_selected_index[threadId + s];
-                    }
-                }
-                __syncthreads();
-            }
-            //time : almost same as previous part
+
+            // select which bit accepted 
+            //select_flipping_bit(select_index_size, threadId, Shared_selected_index, random_int);
+            select_flipping_bit_v2(select_index_size, threadId, Shared_selected_index, random_int);
+            //reduce_to_select_a_bit(Shared_selected_index, threadId, select_index_size, random_int);
+            //reduce_to_select_a_bit_v2(Shared_selected_index, threadId, select_index_size, random_int);
+            //point 8: time : 333,611
+            
             
 
             
-            __syncthreads();
-            
+            //__syncthreads();
+            // point 9: time: 338,722    338,964
+          
             
             // based on the flipped bit j update parameters
             int j = Shared_selected_index[0];
@@ -255,8 +437,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step-1], Shared_H[threadId], 0, j, -1);
             }
             __syncthreads();
-
-            // tiem: almost same as previous part
+            
+            // point 10: tiem: 128,444 or 129,322, 129,240  or  129,439 
             
             
             //if (dev_E[blockId * numberOfIteration + step] < dev_best_energy[blockId]) {
@@ -286,7 +468,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
             __syncthreads();
             
-            //time: same as previous 
+            //point 11: time: 361,359   or   356,756   or   
             
             
             if (step % exchange_attempts == 0) {
@@ -313,10 +495,12 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             //}
         }
     //}
-        return;
+        //return;
+    //point 12: time: 348,522     347624
+        
     if ((debug_mode & DEBUG_SAVE_DEVICE_RESULT) != 0 && threadId == 0) printLog("Final", numberOfIteration, temprature_index, blockId, threadId, dev_E[(blockId+1) * numberOfIteration - 1], 0, 0, 0, 0, -1, -1);
     dev_best_energy[blockId] = *shared_best_energy;
-    dev_Y[tid] = Shared_Y[threadId];
+    if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) dev_Y[tid] = Shared_Y[threadId];
     dev_bestSpinModel[tid] = Shared_bestSpinModel[threadId];
     /*if (tid == 0) {
         printf("best Configuration:\t");
@@ -325,6 +509,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
         }
         printf("\n **** replica: %d, bestEnergy %lf \n", blockId, dev_best_energy[blockId]);
     }*/
+
+    //point 13: time: 348315
 }
 
 

@@ -24,11 +24,12 @@ using namespace std;
 
 int** createVector(int ExecuteMode, int lenY, int num_replicas) {
     int** Y = new int* [num_replicas];
+    srand(time(NULL));
     for (int r = 0; r < num_replicas; r++) {
         // Initialize a new spin vector for each replica
         Y[r] = new int[lenY];
         for (int i = 0; i < lenY; i++) {
-            Y[r][i] = rand() % 2;
+            Y[r][i] = rand() & 1;
 
             // If the ExecuteMode is Ising, convert 0 to -1
             if (ExecuteMode == IsingMode && Y[r][i] == 0)
