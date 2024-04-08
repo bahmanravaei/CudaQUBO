@@ -344,7 +344,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
     // Define pointers to different shared memory segments
     //int* Shared_Y = (int*)sharedMemory;
-    int* Shared_bestSpinModel = (int*)(sharedMemory + (blockDim.x) * sizeof(int));
+    //int* Shared_bestSpinModel = (int*)(sharedMemory + (blockDim.x) * sizeof(int));
     int* Shared_selected_index = (int*)(sharedMemory + 2 * (blockDim.x) * sizeof(int));
 
     double* Shared_H = (double*)(sharedMemory + (select_index_size +2 * (blockDim.x)) * sizeof(int)); //
@@ -402,7 +402,6 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             // Change shared_Y[tid] with a local variable    
             //deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
             deltaE = -1 * (1 - 2 * Y) * Shared_H[threadId];
-            
             //point 4: time:  8150 ms
             
             
@@ -417,7 +416,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             random_int = seed;
             
             //point 5: time : 105,682 ms
-                        
+            
             // time: 4,937 ms
             
             
@@ -453,7 +452,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             
             //__syncthreads();
             // point 9: time: 338,722    338,964
-          
+            
             
             // based on the flipped bit j update parameters
             int j = Shared_selected_index[0];
@@ -475,7 +474,6 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step-1], Shared_H[threadId], 0, j, -1);
             }
             __syncthreads();
-            
             // point 10: tiem: 128,444 or 129,322, 129,240  or  129,439 
             
             
@@ -509,6 +507,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             __syncthreads();
             
             //point 11: time: 361,359   or   356,756   or   
+            
+
             
             
             if (step % exchange_attempts == 0) {
@@ -544,13 +544,6 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) dev_Y[tid] = Y;
     //dev_bestSpinModel[tid] = Shared_bestSpinModel[threadId];
     dev_bestSpinModel[tid] = best_config_Y;
-    /*if (tid == 0) {
-        printf("best Configuration:\t");
-        for (int ii = 0; ii < blockDim.x; ii++) {
-            printf("%d, ", Shared_bestSpinModel[ii]);
-        }
-        printf("\n **** replica: %d, bestEnergy %lf \n", blockId, dev_best_energy[blockId]);
-    }*/
 
     //point 13: time: 348315
 }
