@@ -160,7 +160,26 @@ __device__ void choise_between_two_bits(int threadId, int s, int* Shared_selecte
 
 __device__ void warpReduce_to_select_a_bit(int* Shared_selected_index, unsigned int tid, int array_size, unsigned int random_int) {
     //int random_int = *p_random_int;
-    
+    switch (array_size) {
+    case 64:
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 32, Shared_selected_index, random_int);
+    case 32:
+        if (tid < 16) {random_int = (random_int >> 1); choise_between_two_bits(tid, 16, Shared_selected_index, random_int); }
+    case 16:
+        if (tid < 8) {
+            random_int = (random_int >> 1); choise_between_two_bits(tid, 8, Shared_selected_index, random_int); }
+    case 8:
+        if (tid < 4) {
+            random_int = (random_int >> 1); choise_between_two_bits(tid, 4, Shared_selected_index, random_int); }
+    case 4:
+        if (tid < 2) {
+            random_int = (random_int >> 1); choise_between_two_bits(tid, 2, Shared_selected_index, random_int); }
+    case 2:
+        if (tid < 1) {
+            random_int = (random_int >> 1); choise_between_two_bits(tid, 1, Shared_selected_index, random_int); }
+    }
+
+    /*
     if (array_size >= 64) { 
         random_int = (random_int >> 1); choise_between_two_bits(tid, 32, Shared_selected_index, random_int); }
     if (array_size >= 32) if (tid < 16) {
@@ -172,7 +191,7 @@ __device__ void warpReduce_to_select_a_bit(int* Shared_selected_index, unsigned 
     if (array_size >= 4) if (tid < 2) {
         random_int = (random_int >> 1); choise_between_two_bits(tid, 2, Shared_selected_index, random_int);  }
     if (array_size >= 2) if (tid < 1) {
-        random_int = (random_int >> 1); choise_between_two_bits(tid, 1, Shared_selected_index, random_int);  }
+        random_int = (random_int >> 1); choise_between_two_bits(tid, 1, Shared_selected_index, random_int);  }*/
     //*p_random_int = random_int;
 }
 
@@ -180,12 +199,13 @@ __device__ void warpReduce_to_select_a_bit(int* Shared_selected_index, unsigned 
 // reduce_to_select_a_bit is another version of function "select_flipping_bit"
 __device__ void reduce_to_select_a_bit(int* Shared_selected_index, unsigned int tid, int array_size, unsigned int random_int) {
     //int random_int = *p_random_int;
+    int warp_array_size = array_size;
     //if (array_size >= 2048) { if (tid < 1024) {random_int = (random_int >> 1); flip_a_bit_between_pair(tid, 1024, Shared_selected_index, random_int); } __syncthreads(); }
     if (array_size >= 1024) { if (tid < 512) { random_int = (random_int >> 1); choise_between_two_bits(tid, 512, Shared_selected_index, random_int); } __syncthreads(); }
     if (array_size >= 512) { if (tid < 256) { random_int = (random_int >> 1); choise_between_two_bits(tid, 256, Shared_selected_index, random_int); } __syncthreads(); }
     if (array_size >= 256) { if (tid < 128) { random_int = (random_int >> 1); choise_between_two_bits(tid, 128, Shared_selected_index, random_int); } __syncthreads(); }
-    if (array_size >= 128) { if (tid < 64) { random_int = (random_int >> 1); choise_between_two_bits(tid, 64, Shared_selected_index, random_int); } __syncthreads(); }
-    if (tid < 32) warpReduce_to_select_a_bit(Shared_selected_index, tid, array_size, random_int);
+    if (array_size >= 128) { warp_array_size = 64; if (tid < 64) { random_int = (random_int >> 1); choise_between_two_bits(tid, 64, Shared_selected_index, random_int); } __syncthreads(); }
+    if (tid < 32) warpReduce_to_select_a_bit(Shared_selected_index, tid, warp_array_size, random_int);
     //*p_random_int = random_int;
     __syncthreads();
 }
@@ -229,6 +249,7 @@ __device__ void reduce_to_select_a_bit_v2(int* Shared_selected_index, unsigned i
 
 __device__  void select_flipping_bit_v2(int select_index_size, int threadId, int* Shared_selected_index, unsigned int random_int) {
     int s = select_index_size >> 1;
+    int warp_array_size = select_index_size;
     for (; s > 32; s >>= 1)
     {
         if (threadId < s)
@@ -247,18 +268,35 @@ __device__  void select_flipping_bit_v2(int select_index_size, int threadId, int
             }
         }
         __syncthreads();
+        warp_array_size = 64;
     }
-    if (threadId < 32) warpReduce_to_select_a_bit(Shared_selected_index, threadId, select_index_size, random_int);
+    if (threadId < 32) {
+        switch (warp_array_size) {
+        case 64:
+            random_int = (random_int >> 1); choise_between_two_bits(threadId, 32, Shared_selected_index, random_int);
+        case 32:
+            if (threadId < 16) { random_int = (random_int >> 1); choise_between_two_bits(threadId, 16, Shared_selected_index, random_int); }
+        case 16:
+            if (threadId < 8) { random_int = (random_int >> 1); choise_between_two_bits(threadId, 8, Shared_selected_index, random_int); }
+        case 8:
+            if (threadId < 4) { random_int = (random_int >> 1); choise_between_two_bits(threadId, 4, Shared_selected_index, random_int); }
+        case 4:
+            if (threadId < 2) { random_int = (random_int >> 1); choise_between_two_bits(threadId, 2, Shared_selected_index, random_int); }
+        case 2:
+            if (threadId < 1) { random_int = (random_int >> 1); choise_between_two_bits(threadId, 1, Shared_selected_index, random_int); }
+        }
+    }
     __syncthreads();
 }
 
 __device__  void select_flipping_bit(int select_index_size, int threadId, int* Shared_selected_index, unsigned int random_int) {
     int s = select_index_size >> 1;
+    int b_flag;
     for (; s > 0; s >>= 1)
     {
         if (threadId < s)
         {
-            int b_flag;
+            
             int d_tid = Shared_selected_index[threadId]; int d_tid_s = Shared_selected_index[threadId + s];
             if (d_tid == -1) {
                 Shared_selected_index[threadId] = d_tid_s;
@@ -295,15 +333,17 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     int threadId = threadIdx.x;
     int tid = blockId * blockDim.x + threadId;
     int temprature_index = blockId; 
-    int temp_index_direction = (blockId+1) % 2;
+    char temp_index_direction = (blockId+1) % 2;
     bool stop_flag = false;
+    char Y;
+    char best_config_Y;
     unsigned int seed =  (tid + 1) * SEED_COEF * clock64();;
     //double best_energy = dev_best_energy[blockId];
 
     
 
     // Define pointers to different shared memory segments
-    int* Shared_Y = (int*)sharedMemory;
+    //int* Shared_Y = (int*)sharedMemory;
     int* Shared_bestSpinModel = (int*)(sharedMemory + (blockDim.x) * sizeof(int));
     int* Shared_selected_index = (int*)(sharedMemory + 2 * (blockDim.x) * sizeof(int));
 
@@ -314,9 +354,10 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     //double* Shared_DelH = (double*)(sharedMemory+blockDim.x*sizeof(double));
     //double* Shared_E = (double*)(sharedMemory + (blockDim.x+1) * blockDim.x * sizeof(double));
     
-    
-    Shared_Y[threadId] = dev_Y[tid];
-    Shared_bestSpinModel[threadId] = Shared_Y[threadId];
+    Y = dev_Y[tid];
+    //Shared_Y[threadId] = Y;
+    //Shared_bestSpinModel[threadId] = Y;
+    best_config_Y = Y;
     Shared_selected_index[threadId] = -1;
     if (threadId + blockDim.x < select_index_size) {
         Shared_selected_index[threadId + blockDim.x] = -1;
@@ -359,7 +400,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
         
             //compute Delata energy
             // Change shared_Y[tid] with a local variable    
-            deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
+            //deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
+            deltaE = -1 * (1 - 2 * Y) * Shared_H[threadId];
             
             //point 4: time:  8150 ms
             
@@ -379,21 +421,16 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             // time: 4,937 ms
             
             
-            //if ((deltaE < 0) || (curand_uniform_double(&state) < exp(-deltaE / Shared_Temprature[temprature_index]))) {
+            Shared_selected_index[threadId] = -1;
             if (deltaE < 0) {
                 //dev_Selected_index[index_base+threadId] = threadId;
                 Shared_selected_index[threadId] = threadId;
                 if ((debug_mode & DEBUG_DELTA_FLIP) != 0) printLog("delta candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
             }
-            else if (random_double < exp(-deltaE / Shared_Temprature[temprature_index])) {
+            else if (random_double < expf(-deltaE / Shared_Temprature[temprature_index])) {
                 Shared_selected_index[threadId] = threadId;
                 if ((debug_mode & DEBUG_RANDOM_FLIP) != 0) printLog("random candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
                     //printf("\titeration:%d BId: %d, tId: %d, flip suggestion by randomness. DeltaE: %lf \n", step, blockId, threadId, deltaE);
-            }
-            else {
-                //dev_Selected_index[index_base + threadId] = -1;
-                Shared_selected_index[threadId] = -1;
-                //printf("%d, %d, %d, %lf, %lf, %lf, %lf\n", step, blockId, threadId, random_double, 0, deltaE, exp(-deltaE / Shared_Temprature[temprature_index]));
             }
             
             //point 6: time: 30,517
@@ -405,8 +442,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
 
             // select which bit accepted 
-            //select_flipping_bit(select_index_size, threadId, Shared_selected_index, random_int);
-            select_flipping_bit_v2(select_index_size, threadId, Shared_selected_index, random_int);
+            select_flipping_bit(select_index_size, threadId, Shared_selected_index, random_int);
+            //select_flipping_bit_v2(select_index_size, threadId, Shared_selected_index, random_int);
             //reduce_to_select_a_bit(Shared_selected_index, threadId, select_index_size, random_int);
             //reduce_to_select_a_bit_v2(Shared_selected_index, threadId, select_index_size, random_int);
             //point 8: time : 333,611
@@ -424,7 +461,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             if (threadId == j) {
 
                 //dev_Y[tid] = 1 - dev_Y[tid];
-                Shared_Y[threadId] = 1 - Shared_Y[threadId];
+                //Shared_Y[threadId] = 1 - Shared_Y[threadId];
+                Y = 1 - Y;
                 
                 //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
                 dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
@@ -446,7 +484,9 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             if (dev_E[blockId * numberOfIteration + step] <= *shared_best_energy) {
                 *shared_best_energy = dev_E[blockId * numberOfIteration + step];
                 //dev_bestSpinModel[tid] = dev_Y[tid];
-                Shared_bestSpinModel[threadId] = Shared_Y[threadId];
+                //Shared_bestSpinModel[threadId] = Shared_Y[threadId];
+                //Shared_bestSpinModel[threadId] = Y;
+                best_config_Y = Y;
                 //if(threadId==0) printf("\treplica: %d, bestEnergy %lf \n", blockId, *shared_best_energy);
                 if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0 && threadId == 0) printLog("best energy", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step], 0, 0, j, -1);
             }
@@ -500,8 +540,10 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
         
     if ((debug_mode & DEBUG_SAVE_DEVICE_RESULT) != 0 && threadId == 0) printLog("Final", numberOfIteration, temprature_index, blockId, threadId, dev_E[(blockId+1) * numberOfIteration - 1], 0, 0, 0, 0, -1, -1);
     dev_best_energy[blockId] = *shared_best_energy;
-    if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) dev_Y[tid] = Shared_Y[threadId];
-    dev_bestSpinModel[tid] = Shared_bestSpinModel[threadId];
+    //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) dev_Y[tid] = Shared_Y[threadId];
+    if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) dev_Y[tid] = Y;
+    //dev_bestSpinModel[tid] = Shared_bestSpinModel[threadId];
+    dev_bestSpinModel[tid] = best_config_Y;
     /*if (tid == 0) {
         printf("best Configuration:\t");
         for (int ii = 0; ii < blockDim.x; ii++) {
