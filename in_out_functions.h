@@ -234,14 +234,15 @@ bool createFolder(string folderName) {
 
 
 
-void recordLogs(string outputPath, double** M, double** E, int numberOfIteration, int num_replicas, int lenX, int Lsqrt, int** X, int* bestSpinModel, int debug_mode) {
+void recordLogs(string outputPath, double** E, int numberOfIteration, int num_replicas, int lenX, int Lsqrt, int** X, int* bestSpinModel, int** best_config_all, int debug_mode) {
 
-    if ((debug_mode & DEBUG_MAGNET_RECORD_LOG) == DEBUG_MAGNET_RECORD_LOG)
-        writeListToFile(outputPath + "\\Magnet.csv", M, numberOfIteration, num_replicas);
+    
     if ((debug_mode& DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
         writeListToFile(outputPath + "\\Energy.csv", E, numberOfIteration, num_replicas);
     if ((debug_mode& DEBUG_FINAL_CONFIG) == DEBUG_FINAL_CONFIG)
         writeSpinsInFile(num_replicas, X, lenX, Lsqrt, outputPath, "latticeFinal");
+    if ((debug_mode & DEBUG_BEST_CONFIG_ALL_REP) == DEBUG_BEST_CONFIG_ALL_REP)
+        writeSpinsInFile(num_replicas, best_config_all, lenX, Lsqrt, outputPath, "bestConfig");
 
     //writeSpinInFile(X[0], lenX, Lsqrt, outputPath + "\\latticeFinal.csv");
 
@@ -263,6 +264,9 @@ int set_program_config(string value) {
     int program_config = 0;
     if (value == "Geometric") {
         program_config = TEMPERATURE_GEOMETRIC;
+    }
+    else if (value == "TEMPERATURE_CIRCULAR") {
+        program_config = TEMPERATURE_CIRCULAR;
     }
 
 
@@ -323,13 +327,16 @@ int setDebugMode(string value) {
     else if (value == "DEBUG_MAGNET_RECORD_LOG") {
         debugMode = DEBUG_MAGNET_RECORD_LOG;
     }
+    else if (value == "DEBUG_BEST_CONFIG_ALL_REP") {
+        debugMode = DEBUG_BEST_CONFIG_ALL_REP;
+    }
     
     return debugMode;
 
 }
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
-int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
+int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, int& number_of_temp, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
     std::ifstream fin("settings.txt");
     std::string line;
     std::string Key, Value;
@@ -351,6 +358,10 @@ int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& output
             else if (Key == "Temperature_init:") {
                 stringStream1 >> Value;
                 program_config = program_config | set_program_config(Value);
+                //program_config = set_program_config(Value);
+            }
+            else if (Key == "Number_of_temp:") {
+                stringStream1 >> number_of_temp;
             }
             else if (Key == "Lsqrt:")
                 stringStream1 >> Lsqrt;
@@ -398,5 +409,8 @@ int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& output
         }
     }
     fin.close();
+    if (number_of_temp == 0) {
+        number_of_temp = num_replicas;
+    }
     return program_config;
 }

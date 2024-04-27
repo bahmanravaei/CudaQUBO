@@ -359,7 +359,7 @@ double deltaEnergyIsing(int ExecuteMode, double** A, double* B, int* Y, int lenY
 
 
 
-void replicaExchange(double* Temperature, int num_replicas, int** Y, double** M, double** E, int step, double** H, double*** DelH, int& exchangeFlag) {
+void replicaExchange(double* Temperature, int num_replicas, int** Y, double** E, int step, double** H, double*** DelH, int& exchangeFlag) {
 
     double* delta_beta = new double[num_replicas];
     double* delta_energy = new double[num_replicas];
@@ -380,7 +380,7 @@ void replicaExchange(double* Temperature, int num_replicas, int** Y, double** M,
             //spins[replica, :], spins[replica + 1, :] = spins[replica + 1, :], spins[replica, :]
 
             std::swap(E[r][step], E[r + 1][step]);
-            std::swap(M[r][step], M[r + 1][step]);
+            
         }
         else {
             exchangeFlag = 0;
@@ -416,4 +416,56 @@ void replicaExchangeGpu(double* Temperature, int num_replicas, int** Y, double**
             exchangeFlag = 0;
         }
     }
+}
+
+
+//initialize the bestEnergy, Temperature array range, Energy (E), Magnet (M), and bestSpinModel
+
+double initEnergyAndMagnet(int num_replicas, double** W, double* B, int** Y, int lenY, double** M, double** E, int* bestSpinModel, int debug_mode) {
+    double bestEnergy = 0;
+    if (num_replicas != 1) {
+        for (int r = 0; r < num_replicas; r++) {
+            E[r][0] = energy_version2(W, B, Y[r], lenY, debug_mode);
+            if ((debug_mode & DEBUG_INIT_CONFIG) != 0) print_log_host("create bit config", 0, r, r, -1, E[r][0], 0, 0, 0, 0, -1, -1);
+
+
+            M[r][0] = magnetization(Y[r], lenY);
+            if (r == 0 || bestEnergy > E[r][0]) {
+                if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0) print_log_host("init best energy", 0, r, r, -1, E[r][0], 0, 0, 0, 0, -1, -1);
+                bestEnergy = E[r][0];
+                memcpy(bestSpinModel, Y[r], sizeof(int) * lenY);
+            }
+        }
+    }
+    else {
+        E[0][0] = energy_version2(W, B, Y[0], lenY, debug_mode);
+        M[0][0] = magnetization(Y[0], lenY);
+        bestEnergy = E[0][0];
+        memcpy(bestSpinModel, Y[0], sizeof(int) * lenY);
+    }
+    return bestEnergy;
+}
+
+
+double initEnergy(int num_replicas, double** W, double* B, int** Y, int lenY, double** E, int* bestSpinModel, int debug_mode) {
+    double bestEnergy = 0;
+    if (num_replicas != 1) {
+        for (int r = 0; r < num_replicas; r++) {
+            E[r][0] = energy_version2(W, B, Y[r], lenY, debug_mode);
+            if ((debug_mode & DEBUG_INIT_CONFIG) != 0) print_log_host("create bit config", 0, r, r, -1, E[r][0], 0, 0, 0, 0, -1, -1);
+
+
+            if (r == 0 || bestEnergy > E[r][0]) {
+                if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0) print_log_host("init best energy", 0, r, r, -1, E[r][0], 0, 0, 0, 0, -1, -1);
+                bestEnergy = E[r][0];
+                memcpy(bestSpinModel, Y[r], sizeof(int) * lenY);
+            }
+        }
+    }
+    else {
+        E[0][0] = energy_version2(W, B, Y[0], lenY, debug_mode);
+        bestEnergy = E[0][0];
+        memcpy(bestSpinModel, Y[0], sizeof(int) * lenY);
+    }
+    return bestEnergy;
 }

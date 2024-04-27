@@ -27,7 +27,7 @@ def set_background_image(window):
     function to set the background image for a window
     """
     # Replace 'background_image.png' with the path to your image file
-    image_path = 'nucleus02.png'
+    image_path = 'Image//nucleus02.png'
     
     # Create a PhotoImage object from the image file
     background_image = PhotoImage(file=image_path)

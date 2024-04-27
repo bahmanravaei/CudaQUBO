@@ -248,7 +248,7 @@ int findMinIndex(const double* array, int size) {
 }
 
 
-void unVectorData(int* vector_Y, int** Y, double* vector_E, double** E, int numberOfIteration, int number_replica, int lenY ) {
+void unVectorData(int* vector_Y, int** Y,int* vector_best_all_config, int** best_all_config, double* vector_E, double** E, int numberOfIteration, int number_replica, int lenY ) {
 
     for (int i = 0; i < number_replica; i++) {
         for (int j = 0; j < numberOfIteration; j++) {
@@ -256,22 +256,25 @@ void unVectorData(int* vector_Y, int** Y, double* vector_E, double** E, int numb
         }
         for (int k = 0; k < lenY; k++) {
             Y[i][k] = vector_Y[i * lenY + k];
+            best_all_config[i][k] = vector_best_all_config[i * lenY + k];
+
         }
     }
 
 }
 
-void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* Temperature, int program_config) {
+void intitTemperature(int number_of_replica, double minTemp, double maxTemp, double* Temperature, int program_config) {
     
     double next_temp;
-    if (num_replicas != 1) {
+    printf("intitTemperature program_config : %d \n", program_config);
+    if (number_of_replica != 1) {
         //cout << " \t intitTemperature ---- minTemp: " << minTemp << " \t maxTemp: " << maxTemp << endl;
-        for (int r = 0; r < num_replicas; r++) {
+        for (int r = 0; r < number_of_replica; r++) {
             
             if ((program_config & TEMPERATURE_GEOMETRIC) == TEMPERATURE_GEOMETRIC) {
-                next_temp = minTemp * pow((maxTemp / minTemp), (double)r / (num_replicas - 1));
+                next_temp = minTemp * pow((maxTemp / minTemp), (double)r / (number_of_replica - 1));
             }else
-                next_temp = minTemp + r * (maxTemp - minTemp) / (num_replicas - 1);
+                next_temp = minTemp + r * (maxTemp - minTemp) / (number_of_replica - 1);
             Temperature[r] = next_temp;
             cout << "Temperature: " << Temperature[r] << endl;
         }
@@ -281,6 +284,25 @@ void intitTemperature(int num_replicas, double minTemp, double maxTemp, double* 
         cout << "Temperature: " << Temperature[0] << endl;
     }
 }
+
+void intitTemperature_circular_version(int number_of_temperature, double minTemp, double maxTemp, double* Temperature, int program_config) {
+
+    double next_temp;
+    printf("intitTemperature_circular_version program_config : %d \t number_of_temperature %d \n", program_config, number_of_temperature);
+    
+        for (int T = 0; T < number_of_temperature; T++) {
+
+            if ((program_config & TEMPERATURE_GEOMETRIC) == TEMPERATURE_GEOMETRIC) {
+                next_temp = minTemp * pow((maxTemp / minTemp), (double)T / (number_of_temperature - 1));
+            }
+            else
+                next_temp = minTemp + T * (maxTemp - minTemp) / (number_of_temperature - 1);
+            Temperature[T] = next_temp;
+            cout << "Temperature: " << Temperature[T] << endl;
+        }
+    
+}
+
 
 void make_symmetric(double** W, int len_x) {
     for(int i = 0; i < len_x; i++)

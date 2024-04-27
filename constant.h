@@ -2,7 +2,12 @@
 
 
 #define TEMPERATURE_GEOMETRIC	1
+#define TEMPERATURE_CIRCULAR	2
 #define SEED_COEF				123456789
+#define	DATA_OFFSET_MASK		0xFFFFFFE0
+#define	DATA_ID_MASK			0x1F
+
+
 
 //#define NumberOfIteration       10000
 #define ReadDataFromFile        3    
@@ -42,5 +47,7 @@ step, blockId, threadId, action, Energy, deltaE
 #define DEBUG_FINAL_CONFIG			1024
 #define DEBUG_ENERGY_RECORD_LOG		2048
 #define DEBUG_MAGNET_RECORD_LOG		4096
+#define DEBUG_BEST_CONFIG_ALL_REP	8192
+
 
 

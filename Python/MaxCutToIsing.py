@@ -24,7 +24,7 @@ import sys
 
 
 
-def max_cut_to_qubo(adjacency_matrix):
+def max_cut_to_qubo(adjacency_matrix, Symetric_flag = True):
     """
     Convert a graph represented by its adjacency matrix to a QUBO model for maximum cut.
 
@@ -222,7 +222,7 @@ def test_for_all_bits_configuration(Q, n=5, Flag=False, isingFlag=False , B = []
     return L
     
 #--------------------------------------------------
-def convertGraphToIsing(out_filename_A, in_filename="", graph_adjacency_matrix=[], out_filename_b="", convertMode="Ising"):
+def convertGraphToIsing(out_filename_A, in_filename="", graph_adjacency_matrix=[], out_filename_b="", convertMode="Ising", Symetric_flag=True):
     if (in_filename!=""):
         graph_adjacency_matrix = fileGraphToArray(in_filename)
         
@@ -306,53 +306,6 @@ def test_energy_of_a_configuration(fileNameGraph, cut_file, Flag):
     return E
     ## Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
 
-###############################################################################
-number_of_replica = 10
-list_of_cut_file = []
-list_of_cut_file = ["Excel/Initlattice"+str(i)+".csv" for i in range(number_of_replica)]
-[list_of_cut_file.append("Excel/latticeFinal"+str(i)+".csv") for i in range(number_of_replica)]
-list_of_cut_file.append("Excel/latticeBest.csv")
-
-
-fileNameGraph = "testFile/ising2.5-100_5555_with_loop.gr"
-fileName_Q = "testFile/ising2.5-100_5555_with_loop.gr.Q"
-fileNameGraph2 = "testFile/ising2.5-100_5555_with_loop.gr"
-fileName_Q2 = "testFile/ising2.5-100_5555_with_loop.gr.Q"
-
-fileName_Q_or_graph = [fileName_Q, fileNameGraph, fileName_Q2, fileNameGraph2]
-
-a_cut = "testFile/bestSolution.csv"
-list_of_cut_file.append(a_cut)
-
-fileName_Q = "testFile/maxCut_n_5_e_res_8Q.txt"
-fileNameGraph = "testFile/maxcut_simple_graph_q_in_book.q"
-
-fileName_Q = "testFile/maxCutmaxCut_n10_e18_res74.csv.Q"
-fileNameGraph = "testFile/maxCut_n10_e18_res74.csv"
-
-fileName_Q = "testFile/maxCutmaxCut_n20_e38_res271.csv.Q"
-fileNameGraph = "testFile/maxCut_n20_e38_res271.csv"
-
-fileName_Q = "testFile/g05_100.0Q"
-fileNameGraph = "testFile/g05_100.0"
-
-FlagList = [True, False]
-
-fileName_Q_or_graph = [fileName_Q, fileNameGraph]
-
-def test_calculate_energy_of_cut_list(fileName_Q_or_graph, list_of_cut_file, FlagList):
-    # Flag == True => Q is in form of QUBO , Flag == False  => Q is adjacency Matrix
-    print("|Trace\t|\t\tQ\t\t|\t\tG\t\t|")
-    print("___________________________________________")
-    print("|\t\t|\tT\t|\tF\t|\tT\t|\tF\t|")
-    print("___________________________________________")
-    
-    for filename in list_of_cut_file:
-        for file_of_matrix in fileName_Q_or_graph:
-            for Flag in FlagList:
-                E = test_energy_of_a_configuration(file_of_matrix, filename, Flag)
-                print(file_of_matrix, filename, Flag, E)
-        print("___________________________________________")
 
 
 ###############################################################################
