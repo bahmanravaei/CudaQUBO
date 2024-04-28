@@ -371,7 +371,7 @@ __device__  void select_flipping_bit_v03(int select_index_size, int threadId, in
                 b_flag = (random_int & 1);
                 d_tid = (b_flag * d_tid_s + (1 - b_flag) * d_tid);
                 Shared_selected_index2[data_index] = d_tid;
-            }            
+            }
             s >>= 1;
             d_tid_s = Shared_selected_index2[data_index + s];
             if (d_tid == -1) {
@@ -433,7 +433,7 @@ __device__  void select_flipping_bit(int select_index_size, int threadId, int* S
 
 
 //dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration
-__global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_sign, int* dev_Y, int* dev_Selected_index, const int select_index_size, double* dev_E, int* dev_bestSpinModel, double* dev_best_energy, int numberOfIteration, int exchange_attempts, double* dev_Temprature, int number_of_temp, int debug_mode, int program_config)
+__global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_sign, int* dev_Y, int* dev_Selected_index, const int select_index_size, double* dev_E, int* dev_bestSpinModel, double* dev_best_energy, int numberOfIteration, int exchange_attempts, int extend_exchange_step, double* dev_Temprature, int number_of_temp, int debug_mode, int program_config)
 {   
     extern __shared__ char sharedMemory[];
 
@@ -500,7 +500,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     double deltaE;
     double random_double;
     unsigned int random_int;
-    
+    int next_exchange = exchange_attempts;
     //point 1: time: 0.63 ms
     //curandState state;
     // point 2: This part is time consuming, we should change it!!!> 162 ms
@@ -572,9 +572,6 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             int j = Shared_selected_index[0];
             
             if (threadId == j) {
-
-                //dev_Y[tid] = 1 - dev_Y[tid];
-                //Shared_Y[threadId] = 1 - Shared_Y[threadId];
                 Y = 1 - Y;
                 
                 //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
@@ -591,14 +588,16 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             // point 10: tiem: 128,444 or 129,322, 129,240  or  129,439 
             
             
-            //if (dev_E[blockId * numberOfIteration + step] < dev_best_energy[blockId]) {
-            //dev_best_energy[blockId] = dev_E[blockId * numberOfIteration + step];
-            if (dev_E[blockId * numberOfIteration + step] <= *shared_best_energy) {
-                *shared_best_energy = dev_E[blockId * numberOfIteration + step];
-                //dev_bestSpinModel[tid] = dev_Y[tid];
-                //Shared_bestSpinModel[threadId] = Shared_Y[threadId];
-                //Shared_bestSpinModel[threadId] = Y;
+            if (dev_E[blockId * numberOfIteration + step] < *shared_best_energy) {
+                if (threadId == 0) *shared_best_energy = dev_E[blockId * numberOfIteration + step];
                 best_config_Y = Y;
+                if ((program_config & FAST_CONVERGE) == FAST_CONVERGE) {
+                    temprature_index = 0;
+                    temp_index_direction = 1;
+                    if (next_exchange < step + extend_exchange_step)
+                        next_exchange = step + extend_exchange_step;                        
+                }
+
                 //if(threadId==0) printf("\treplica: %d, bestEnergy %lf \n", blockId, *shared_best_energy);
                 if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0 && threadId == 0) printLog("best energy", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step], 0, 0, j, -1);
             }
@@ -607,12 +606,9 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
             if (j != -1) {
                 //Update H                  (dev_DelH : replica * lenY * lenY)
-                //dev_H[tid] = dev_H[tid] + dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j];
-                
-                
                 Shared_H[threadId] = Shared_H[threadId] + dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j];
-                // Update delta_H
                 
+                // Update delta_H
                 dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j] *= -1;
                 if ((debug_mode & DEBUG_UPDATE_H) != 0) printLog("Update H", step, temprature_index, blockId, threadId, 0, 0, 0, Shared_H[threadId], dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j], j, blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j);
 
@@ -625,7 +621,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
 
             
             
-            if (step % exchange_attempts == 0) {
+            if (step == next_exchange) {
                 if ((program_config & TEMPERATURE_CIRCULAR) == TEMPERATURE_CIRCULAR) {
                     if (temprature_index==0) temprature_index = number_of_temp-1;
                     else temprature_index--;
@@ -643,6 +639,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 }
                 if (tid == 0)
                     printf("step: %d, index: %d, temp: %lf\n", step, temprature_index, Shared_Temprature[temprature_index]);
+                next_exchange = step + exchange_attempts;
             }
 
             
@@ -910,7 +907,7 @@ void FreeMemoryDevice(double* dev_H, double* dev_DelH, double* dev_W, double* de
 
 //prepare_full_MetropolisKernel(vector_H, vector_DelH, DelH_sign, WGpu, B, vector_Y, lenY, vector_E, Temperature, exchange_attempts, bestEnergy, bestSpinModel);
 // prepare memory to call Gpu Kernel
-cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH, int* vector_DelH_sign, double* WGpu, double* B, int* vector_Y , int* vector_best_all_config, int lenY, double* vector_E, double* Temperature, int number_of_temp, int exchange_attempts, double*  bestEnergy, int* bestSpinModel, int replica, int numberOfIteration, int debug_mode, int program_config) {
+cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH, int* vector_DelH_sign, double* WGpu, double* B, int* vector_Y , int* vector_best_all_config, int lenY, double* vector_E, double* Temperature, int number_of_temp, int exchange_attempts, int extend_exchange_mode, double*  bestEnergy, int* bestSpinModel, int replica, int numberOfIteration, int debug_mode, int program_config) {
 
     double* dev_H = 0;
     double* dev_DelH = 0;
@@ -963,7 +960,7 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
     cudaEventCreate(&stop);
     cudaEventRecord(start);
     
-    full_mode_metropolisKernel << <replica, lenY , size_of_shared_Memory >> > (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, select_index_size, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration, exchange_attempts, dev_Temprature, number_of_temp, debug_mode, program_config);
+    full_mode_metropolisKernel << <replica, lenY , size_of_shared_Memory >> > (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, select_index_size, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration, exchange_attempts, extend_exchange_mode, dev_Temprature, number_of_temp, debug_mode, program_config);
     
 
     // Check for any errors launching the kernel
@@ -1098,7 +1095,7 @@ double metropolis(int ExecuteMode, double** W, double* B, double* H, double** De
 
 
 
-double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y,int** best_all_config, int lenY, double** E, int* bestSpinModel, double bestEnergy, int numberOfIteration, int exchange_attempts, int number_of_temp, double minTemp, double maxTemp, int debug_mode, int program_config) {
+double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y,int** best_all_config, int lenY, double** E, int* bestSpinModel, double bestEnergy, int numberOfIteration, int exchange_attempts, int extend_exchange_mode, int number_of_temp, double minTemp, double maxTemp, int debug_mode, int program_config) {
     double** H = ComputeH_forAllReplica(num_replicas, W, B, Y, lenY);
     double*** DelH = ComputeDelH_forAllReplica(num_replicas, W, Y, lenY);
     int* DelH_sign = new int[num_replicas* lenY];
@@ -1127,7 +1124,7 @@ double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y,int** best
     vector_E = convert2Dto1D(E, num_replicas, numberOfIteration);
 
     
-    prepare_full_MetropolisKernel(vector_H, vector_DelH, DelH_sign, vector_W, B, vector_Y, vector_best_all_config, lenY, vector_E, Temperature, number_of_temp, exchange_attempts, &bestEnergy, bestSpinModel, num_replicas, numberOfIteration, debug_mode, program_config);
+    prepare_full_MetropolisKernel(vector_H, vector_DelH, DelH_sign, vector_W, B, vector_Y, vector_best_all_config, lenY, vector_E, Temperature, number_of_temp, exchange_attempts, extend_exchange_mode, &bestEnergy, bestSpinModel, num_replicas, numberOfIteration, debug_mode, program_config);
     
     unVectorData(vector_Y, Y, vector_best_all_config, best_all_config, vector_E, E, numberOfIteration, num_replicas, lenY );
     
@@ -1142,7 +1139,7 @@ double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y,int** best
 * M: record of Magnet in each iteration per replica
 * E: record of Energy in each iteration per replica
 */
-void ising(int ExecuteMode, double** W, double* B, int** Y, int** best_all_config, int lenY, double** E, double T, int num_replicas, int numberOfIteration, int exchange_attempts, int* bestSpinModel, int number_of_temp, double minTemp, double maxTemp, int debug_mode, int program_config) {
+void ising(int ExecuteMode, double** W, double* B, int** Y, int** best_all_config, int lenY, double** E, double T, int num_replicas, int numberOfIteration, int exchange_attempts, int extend_exchange_mode, int* bestSpinModel, int number_of_temp, double minTemp, double maxTemp, int debug_mode, int program_config) {
 
     double bestEnergy;
     double* Temperature = new double[num_replicas];
@@ -1162,7 +1159,7 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int** best_all_confi
     cout << "The best initial energy: " << bestEnergy << endl;
     if (ExecuteMode == QUBOGPUFULL) {
         //prepare_Full_GPU_Mode();
-        bestEnergy = full_GPU_Mode(num_replicas, W, B, Y, best_all_config, lenY, E, bestSpinModel, bestEnergy, numberOfIteration, exchange_attempts, number_of_temp, minTemp, maxTemp, debug_mode, program_config);
+        bestEnergy = full_GPU_Mode(num_replicas, W, B, Y, best_all_config, lenY, E, bestSpinModel, bestEnergy, numberOfIteration, exchange_attempts, extend_exchange_mode, number_of_temp, minTemp, maxTemp, debug_mode, program_config);
         return;
     }
     else if (ExecuteMode == QUBOGPU) {
@@ -1232,6 +1229,7 @@ int main()
     double maxTemp = 0;             // Max temperature of replica exchange MCMC
     int numberOfIteration = 1;      // Number of Iteration in for MCMC
     int exchange_attempts = 0;      // After how many iteration, an exchange should be applied
+    int extend_exchange_mode = 0;
 
     /*      E = -\sum_{i,j} A_{i,j} s_i s_j - \sum_i B_i s_i   */
     string Afile = "";              //      file path for A matrix in Ising (QUBO) model 
@@ -1242,7 +1240,7 @@ int main()
     int problem_type = NORMAL;
 
     /*      Read the setting file and initialize the parameters    */
-    int program_config = readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, number_of_temp, minTemp, maxTemp, debug_mode, problem_type);
+    int program_config = readSetting(L, Lsqrt, Afile, Bfile, outputPath, ExecuteMode, num_replicas, numberOfIteration, exchange_attempts, extend_exchange_mode, number_of_temp, minTemp, maxTemp, debug_mode, problem_type);
     cout << "program config" << program_config << endl;
     cout << "DEBUG_MODE" << debug_mode<<endl;
     cout << "problem_type: " << problem_type << endl;
@@ -1284,7 +1282,7 @@ int main()
         writeSpinsInFile(num_replicas, X, L, Lsqrt, outputPath, "Initlattice");
 
     // Optimization Function
-    ising(ExecuteMode, A, B, X, best_all_config, L, E, T, num_replicas, numberOfIteration, exchange_attempts, bestSpinModel,number_of_temp, minTemp, maxTemp, debug_mode, program_config);
+    ising(ExecuteMode, A, B, X, best_all_config, L, E, T, num_replicas, numberOfIteration, exchange_attempts, extend_exchange_mode, bestSpinModel,number_of_temp, minTemp, maxTemp, debug_mode, program_config);
     printf("Execution is done, waiting for loging\n");
     
     //  Record Logs: Magnet, Energy, final spin states, and best spin model
@@ -1292,7 +1290,3 @@ int main()
 
     return 0;
 }
-
-
-
-/*****************************************************************************************/

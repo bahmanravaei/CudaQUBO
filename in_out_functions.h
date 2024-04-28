@@ -268,6 +268,9 @@ int set_program_config(string value) {
     else if (value == "TEMPERATURE_CIRCULAR") {
         program_config = TEMPERATURE_CIRCULAR;
     }
+    else if (value == "FAST_CONVERGE") {
+        program_config = FAST_CONVERGE;
+    }
 
 
     return program_config;
@@ -336,11 +339,12 @@ int setDebugMode(string value) {
 }
 
 /* read the configuration from the file Settings.txt and initialize the parameter  */
-int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, int& number_of_temp, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
+int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& outputPath, int& ExecuteMode, int& num_replicas, int& numberOfIteration, int& exchange_attempts, int& extend_exchange_mode, int& number_of_temp, double& minTemp, double& maxTemp, int& debug_mode, int& problem_type) {
     std::ifstream fin("settings.txt");
     std::string line;
     std::string Key, Value;
     int program_config = 0;
+    extend_exchange_mode = 0;
     if (fin.is_open()) {
 
         while (std::getline(fin, line)) {
@@ -351,13 +355,18 @@ int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& output
 
             if (Key == "SizeOfVector:")
                 stringStream1 >> L;
-            else if (Key == "ProblemType:") {                
+            else if (Key == "ProblemType:") {// Description of the input QUBO problem                
                 stringStream1 >> Value;
                 problem_type = problem_type | set_problem_type(Value);                                                
             }
             else if (Key == "Temperature_init:") {
                 stringStream1 >> Value;
-                program_config = program_config | set_program_config(Value);
+                program_config = program_config | set_program_config(Value); // Description for solver configuration
+                //program_config = set_program_config(Value);
+            }
+            else if (Key == "program_config:") {
+                stringStream1 >> Value;
+                program_config = program_config | set_program_config(Value); // Description for solver configuration
                 //program_config = set_program_config(Value);
             }
             else if (Key == "Number_of_temp:") {
@@ -412,5 +421,12 @@ int readSetting(int& L, int& Lsqrt, string& Afile, string& Bfile, string& output
     if (number_of_temp == 0) {
         number_of_temp = num_replicas;
     }
+    if (extend_exchange_mode == 0) {
+        if (exchange_attempts >= 100)
+            extend_exchange_mode = exchange_attempts / 10;
+        else
+            extend_exchange_mode = 10;
+    }
+
     return program_config;
 }
