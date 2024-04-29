@@ -442,6 +442,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     int tid = blockId * blockDim.x + threadId;
     int temprature_index = blockId % number_of_temp;
     char temp_index_direction = (blockId+1) % 2;
+    int second_previous_j = -1, previous_j = -1;
     bool stop_flag = false;
     char Y;
     char best_config_Y;
@@ -466,6 +467,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     //Shared_Y[threadId] = Y;
     //Shared_bestSpinModel[threadId] = Y;
     best_config_Y = Y;
+    char No_new_suggestion = extend_exchange_step;
     Shared_selected_index[threadId] = -1;
     if (threadId + blockDim.x < select_index_size) {
         Shared_selected_index[threadId + blockDim.x] = -1;
@@ -571,19 +573,46 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             // based on the flipped bit j update parameters
             int j = Shared_selected_index[0];
             
+            if (j == -1) {
+                No_new_suggestion -= 1;
+                if (threadId == 0) {
+                    // Log the Energy when there is not any bit to flip
+                    dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1];
+                    if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step - 1], Shared_H[threadId], 0, j, -1);
+                }
+            }
+            else {
+                
+                if (threadId == j) {
+                    Y = 1 - Y;
+
+                    //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
+                    dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
+
+                    if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("flipped", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, dev_E[blockId * numberOfIteration + step - 1] + deltaE, Shared_H[threadId], 0, j, -1);
+                }
+                if(j==previous_j || j == second_previous_j)
+                    No_new_suggestion -= 1;
+                else {
+                    No_new_suggestion = extend_exchange_step;
+                    second_previous_j = previous_j;
+                    previous_j = j;
+                }
+                //if (tid == 0)
+                  //  printf("step: flip,%d,%d\n",step, j);
+            }
+            
+
+            /*
             if (threadId == j) {
                 Y = 1 - Y;
-                
-                //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
                 dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
-
                 if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("flipped", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, dev_E[blockId * numberOfIteration + step - 1] + deltaE, Shared_H[threadId], 0, j, -1);
-                              
             }else if(j==-1 && threadId==0){
                 // Log the Energy when there is not any bit to flip
                 dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1];
                 if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step-1], Shared_H[threadId], 0, j, -1);
-            }
+            }*/
             __syncthreads();
             // point 10: tiem: 128,444 or 129,322, 129,240  or  129,439 
             
@@ -592,6 +621,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 if (threadId == 0) *shared_best_energy = dev_E[blockId * numberOfIteration + step];
                 best_config_Y = Y;
                 if ((program_config & FAST_CONVERGE) == FAST_CONVERGE) {
+                    //if (tid == 0 && temprature_index != 0)printf("\t\t\t step: %d drop temp to zero level\n", step);
                     temprature_index = 0;
                     temp_index_direction = 1;
                     if (next_exchange < step + extend_exchange_step)
@@ -612,8 +642,24 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j] *= -1;
                 if ((debug_mode & DEBUG_UPDATE_H) != 0) printLog("Update H", step, temprature_index, blockId, threadId, 0, 0, 0, Shared_H[threadId], dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j], j, blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j);
 
-            }         
+                /*if (step > 2 && dev_E[blockId * numberOfIteration + step] == dev_E[blockId * numberOfIteration + step - 2])
+                    No_new_suggestion -= 1;
+                else
+                    No_new_suggestion = extend_exchange_step;
+                */
 
+            }
+            if (No_new_suggestion == 0) {
+
+                //if (tid == 0)printf("\tstep:%d temp index %d No_new_suggestion is zero\n", step, temprature_index);
+                No_new_suggestion = extend_exchange_step;
+                if ((program_config & FAST_CONVERGE) == FAST_CONVERGE) {
+                    temp_index_direction = 1;
+                    temprature_index += temp_index_direction;
+                    stop_flag = true;
+                    next_exchange = step + exchange_attempts;
+                }
+            }
             __syncthreads();
             
             //point 11: time: 361,359   or   356,756   or   
@@ -622,6 +668,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             
             
             if (step == next_exchange) {
+                No_new_suggestion = extend_exchange_step;
                 if ((program_config & TEMPERATURE_CIRCULAR) == TEMPERATURE_CIRCULAR) {
                     if (temprature_index==0) temprature_index = number_of_temp-1;
                     else temprature_index--;
@@ -637,8 +684,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 else {
                     stop_flag = false;
                 }
-                if (tid == 0)
-                    printf("step: %d, index: %d, temp: %lf\n", step, temprature_index, Shared_Temprature[temprature_index]);
+                //if (tid == 0)
+                //    printf("\t\tstep: %d, index: %d, temp: %lf\n", step, temprature_index, Shared_Temprature[temprature_index]);
                 next_exchange = step + exchange_attempts;
             }
 
