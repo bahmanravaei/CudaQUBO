@@ -545,8 +545,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     //curand_init(clock64(), tid, clock64(), &state);
     
     if (threadId == 0) {
-        printf("blockId: %d, bestEnergy %lf %lf , %d\n", blockId, *shared_previous_step_energy, dev_E[blockId * numberOfIteration], (*shared_previous_step_energy) == dev_E[blockId * numberOfIteration]);
-        printf("blockId: %d   temprature %d : %lf \n", blockId, temprature_index, Shared_Temprature[temprature_index]);
+        if((*shared_previous_step_energy) != dev_E[blockId * numberOfIteration]) printf("blockId: %d, bestEnergy %lf %lf , %d\n", blockId, *shared_previous_step_energy, dev_E[blockId * numberOfIteration], (*shared_previous_step_energy) == dev_E[blockId * numberOfIteration]);
+        //printf("blockId: %d   temprature %d : %lf \n", blockId, temprature_index, Shared_Temprature[temprature_index]);
     }
 
     for (int step = 1; step < numberOfIteration; step++) {
@@ -598,11 +598,11 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             if (deltaE < 0) {
                 //dev_Selected_index[index_base+threadId] = threadId;
                 Shared_selected_index[threadId] = threadId;
-                if ((debug_mode & DEBUG_DELTA_FLIP) != 0) printLog("delta candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
+                //if ((debug_mode & DEBUG_DELTA_FLIP) != 0) printLog("delta candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
             }
             else if (random_double < expf(-deltaE / Shared_Temprature[temprature_index])) {
                 Shared_selected_index[threadId] = threadId;
-                if ((debug_mode & DEBUG_RANDOM_FLIP) != 0) printLog("random candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
+                //if ((debug_mode & DEBUG_RANDOM_FLIP) != 0) printLog("random candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
                 //printf("\titeration:%d BId: %d, tId: %d, flip suggestion by randomness. DeltaE: %lf \n", step, blockId, threadId, deltaE);
             }
 
@@ -638,8 +638,10 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 No_new_suggestion -= 1;
                 if (threadId == 0) {
                     // Log the Energy when there is not any bit to flip
-                    dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1];
-                    if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step - 1], Shared_H[threadId], 0, j, -1);
+                    if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) {
+                        dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1];
+                    }
+                    //if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("Nothing", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step - 1], Shared_H[threadId], 0, j, -1);
                 }
             }
             else {
@@ -648,9 +650,13 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                     Y = 1 - Y;
 
                     //if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG)
-                    dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
+                    *shared_previous_step_energy = *shared_previous_step_energy + deltaE;
+                    if ((debug_mode & DEBUG_ENERGY_RECORD_LOG) == DEBUG_ENERGY_RECORD_LOG) {
+                        dev_E[blockId * numberOfIteration + step] = *shared_previous_step_energy;
+                    }
+                    //dev_E[blockId * numberOfIteration + step] = dev_E[blockId * numberOfIteration + step - 1] + deltaE;
 
-                    if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("flipped", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, dev_E[blockId * numberOfIteration + step - 1] + deltaE, Shared_H[threadId], 0, j, -1);
+                    //if ((debug_mode & DEBUG_SELECTED_FLIP) != 0) printLog("flipped", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, dev_E[blockId * numberOfIteration + step - 1] + deltaE, Shared_H[threadId], 0, j, -1);
                 }
                 if(j==previous_j || j == second_previous_j)
                     No_new_suggestion -= 1;
@@ -678,8 +684,10 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             // point 10: tiem: 128,444 or 129,322, 129,240  or  129,439 
             
             
-            if (dev_E[blockId * numberOfIteration + step] < *shared_best_energy) {
-                if (threadId == 0) *shared_best_energy = dev_E[blockId * numberOfIteration + step];
+            if (*shared_previous_step_energy < *shared_best_energy) {
+            //if (dev_E[blockId * numberOfIteration + step] < *shared_best_energy) {
+                //if (threadId == 0) *shared_best_energy = dev_E[blockId * numberOfIteration + step];
+                if (threadId == 0) *shared_best_energy = *shared_previous_step_energy;
                 best_config_Y = Y;
                 if ((program_config & FAST_CONVERGE) == FAST_CONVERGE) {
                     //if (tid == 0 && temprature_index != 0)printf("\t\t\t step: %d drop temp to zero level\n", step);

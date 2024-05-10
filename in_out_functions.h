@@ -89,7 +89,7 @@ void writeListToFile(string fileName, double** List, int L, int num_replicas) {
         cout << "ERROR    :   File not created!";
     }
     else {
-
+        my_file << std::fixed;
         for (int i = 0; i < L; i++)
         {
             for (int r = 0; r < num_replicas; r++) {
