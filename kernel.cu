@@ -104,7 +104,7 @@ __global__ void metropolisKernel(double* dev_H, double* dev_DelH, int* dev_DelH_
 __device__ unsigned int generate_random_int_v02(unsigned int* seed) {
     unsigned int a = 1103515245;
     unsigned int c = 12345;
-    unsigned int m = 2147483648;
+    //unsigned int m = 2147483648;
     *seed = (*seed * a + c);
     return (*seed / 10);
 
@@ -467,6 +467,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     char Y;
     char best_config_Y;
     unsigned int seed =  (tid + 1) * SEED_COEF * clock64();
+    
     //double best_energy = dev_best_energy[blockId];
 
     
@@ -474,15 +475,28 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     // Define pointers to different shared memory segments
     //int* Shared_Y = (int*)sharedMemory;
     //int* Shared_bestSpinModel = (int*)(sharedMemory + (blockDim.x) * sizeof(int));
-    int* Shared_selected_index = (int*)(sharedMemory + 2 * (blockDim.x) * sizeof(int));
+    
+    //int* Shared_selected_index = (int*)(sharedMemory + 2 * (blockDim.x) * sizeof(int));
+    int* Shared_selected_index = (int*)sharedMemory ;
 
-    double* Shared_H = (double*)(sharedMemory + (select_index_size +2 * (blockDim.x)) * sizeof(int)); //
-    double* Shared_Temprature = (double*)(sharedMemory + (select_index_size + 2 * (blockDim.x)) * sizeof(int)+ (blockDim.x) * sizeof(double));
-    double* shared_best_energy = (double*)(sharedMemory + (select_index_size + 2 * (blockDim.x)) * sizeof(int) + (blockDim.x + gridDim.x) * sizeof(double));
+    //double* Shared_H = (double*)(sharedMemory + (select_index_size +2 * (blockDim.x)) * sizeof(int)); //
+    double* Shared_H = (double*)(sharedMemory + select_index_size  * sizeof(int));
+
+    //double* Shared_Temprature = (double*)(sharedMemory + (select_index_size + 2 * (blockDim.x)) * sizeof(int)+ (blockDim.x) * sizeof(double));
+    double* Shared_Temprature = (double*)(sharedMemory + (select_index_size * sizeof(int)) + (blockDim.x) * sizeof(double));
+
+    //double* shared_best_energy = (double*)(sharedMemory + (select_index_size + 2 * (blockDim.x)) * sizeof(int) + (blockDim.x + gridDim.x) * sizeof(double));
+    double* shared_best_energy = (double*)(sharedMemory + (select_index_size * sizeof(int)) + (blockDim.x + number_of_temp) * sizeof(double));
     *shared_best_energy = dev_best_energy[blockId];
     //double* Shared_DelH = (double*)(sharedMemory+blockDim.x*sizeof(double));
     //double* Shared_E = (double*)(sharedMemory + (blockDim.x+1) * blockDim.x * sizeof(double));
     
+    double* shared_previous_step_energy = (double*)(sharedMemory + (select_index_size * sizeof(int)) + (blockDim.x + number_of_temp + 1) * sizeof(double));
+    if (threadId == 0) {
+        *shared_previous_step_energy = dev_best_energy[blockId];
+    }
+
+
     Y = dev_Y[tid];
     //Shared_Y[threadId] = Y;
     //Shared_bestSpinModel[threadId] = Y;
@@ -530,6 +544,11 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     // point 2: This part is time consuming, we should change it!!!> 162 ms
     //curand_init(clock64(), tid, clock64(), &state);
     
+    if (threadId == 0) {
+        printf("blockId: %d, bestEnergy %lf %lf , %d\n", blockId, *shared_previous_step_energy, dev_E[blockId * numberOfIteration], (*shared_previous_step_energy) == dev_E[blockId * numberOfIteration]);
+        printf("blockId: %d   temprature %d : %lf \n", blockId, temprature_index, Shared_Temprature[temprature_index]);
+    }
+
     for (int step = 1; step < numberOfIteration; step++) {
         //point3:  time : 754 ms
 
@@ -803,7 +822,7 @@ cudaError_t allocateMemory(int lenY, int block_size, int exchange_attempts, doub
 
 }
 
-cudaError_t allocateMemory_with_size(double** dev_H, double** dev_DelH, double** dev_W, double** dev_B, double** dev_E, int** dev_bestSpinModel, int** dev_Y, int** dev_Selected_index, int** dev_lenY, int** dev_DelH_sign, double** dev_bestenergy, double** dev_Temprature, int* sizeArray) {
+cudaError_t allocateMemory_with_size(double** dev_H, double** dev_DelH, double** dev_W, double** dev_B, double** dev_E, int** dev_bestSpinModel, int** dev_Y, int** dev_Selected_index, int** dev_lenY, int** dev_DelH_sign, double** dev_bestenergy, double** dev_Temprature, int* sizeArray, int debug_mode) {
 
     cudaError_t cudaStatus;
 
@@ -848,7 +867,7 @@ cudaError_t allocateMemory_with_size(double** dev_H, double** dev_DelH, double**
 
 }
 
-cudaError_t copyMemoryFromHostToDevice_with_size(double* H, double* dev_H, double* DelH, double* dev_DelH, int* DelH_sign, int* dev_DelH_sign, double* WGpu, double* dev_W, int* Y, int* dev_Y, double* E, double* dev_E, double bestEnergy, double* dev_bestenergy, int* bestSpinModel, int* dev_bestSpinModel, int* dev_Selected_index, double* dev_Temprature, double* Temprature, int* sizeArray) {
+cudaError_t copyMemoryFromHostToDevice_with_size(double* H, double* dev_H, double* DelH, double* dev_DelH, int* DelH_sign, int* dev_DelH_sign, double* WGpu, double* dev_W, int* Y, int* dev_Y, double* E, double* dev_E, double bestEnergy, double* bestEnergyArray, double* dev_bestenergy, int* bestSpinModel, int* dev_bestSpinModel, int* dev_Selected_index, double* dev_Temprature, double* Temprature, int* sizeArray, int debug_mode) {
 
     cudaError_t cudaStatus;
     // Copy input vectors from host memory to GPU buffers.
@@ -876,8 +895,8 @@ cudaError_t copyMemoryFromHostToDevice_with_size(double* H, double* dev_H, doubl
     cudaStatus = cudaMemcpy(dev_bestSpinModel, extended_bestSpinModel, sizeArray[9] * sizeArray[8] * sizeof(int), cudaMemcpyHostToDevice);
     checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_bestSpinModel");
 
-    double* bestEnergyArray = new double[sizeArray[9]];
-    fill1Darray(bestEnergyArray, bestEnergy, sizeArray[9]);
+    //double* bestEnergyArray = new double[sizeArray[9]];
+    //fill1Darray(bestEnergyArray, bestEnergy, sizeArray[9]);
     cudaStatus = cudaMemcpy(dev_bestenergy, bestEnergyArray, sizeArray[9] * sizeof(double), cudaMemcpyHostToDevice);
     checkErrorCuda(cudaStatus, "cudaMemcpy failed! dev_bestenergy");
 
@@ -931,7 +950,7 @@ cudaError_t copyMemoryFromHostToDevice(double* H, double* dev_H, double* DelHGpu
 
 }
 
-void copyMemoryFromDeviceToHost_with_size(int* vector_Y, int* dev_Y, int* bestSpinModel, int* vector_best_all_config, int* dev_bestSpinModel, double* bestEnergy, double* dev_bestenergy, double* vector_E, double* dev_E, int* memory_size)
+void copyMemoryFromDeviceToHost_with_size(int* vector_Y, int* dev_Y, int* bestSpinModel, int* vector_best_all_config, int* dev_bestSpinModel, double* bestEnergy, double* dev_bestenergy, double* vector_E, double* dev_E, int* memory_size, int debug_mode)
 {
     cudaError_t cudaStatus;
 
@@ -983,7 +1002,7 @@ cudaError_t copyMemoryFromDeviceToHost(int lenY, double* H, double* dev_H, doubl
     return cudaStatus;
 }
 
-void FreeMemoryDevice(double* dev_H, double* dev_DelH, double* dev_W, double* dev_B, double* dev_E, int* dev_bestSpinModel, int* dev_Y, int* dev_Selected_index, int* dev_lenY, int* dev_DelH_sign, double* dev_bestenergy) {
+void FreeMemoryDevice(double* dev_H, double* dev_DelH, double* dev_W, double* dev_B, double* dev_E, int* dev_bestSpinModel, int* dev_Y, int* dev_Selected_index, int* dev_lenY, int* dev_DelH_sign, double* dev_bestenergy, int debug_mode) {
     cudaFree(dev_H);
     cudaFree(dev_DelH);
     cudaFree(dev_DelH_sign);
@@ -999,7 +1018,7 @@ void FreeMemoryDevice(double* dev_H, double* dev_DelH, double* dev_W, double* de
 
 //prepare_full_MetropolisKernel(vector_H, vector_DelH, DelH_sign, WGpu, B, vector_Y, lenY, vector_E, Temperature, exchange_attempts, bestEnergy, bestSpinModel);
 // prepare memory to call Gpu Kernel
-cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH, int* vector_DelH_sign, double* WGpu, double* B, int* vector_Y , int* vector_best_all_config, int lenY, double* vector_E, double* Temperature, int number_of_temp, int exchange_attempts, int extend_exchange_mode, double*  bestEnergy, int* bestSpinModel, int replica, int numberOfIteration, int debug_mode, int program_config) {
+cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH, int* vector_DelH_sign, double* WGpu, double* B, int* vector_Y , int* vector_best_all_config, int lenY, double* vector_E, double* Temperature, int number_of_temp, int exchange_attempts, int extend_exchange_mode, double*  bestEnergy, double* bestEnergyArray, int* bestSpinModel, int replica, int numberOfIteration, int debug_mode, int program_config) {
 
     double* dev_H = 0;
     double* dev_DelH = 0;
@@ -1015,7 +1034,7 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
     double* dev_bestenergy = 0;
     double* dev_Temprature = 0;
 
-    
+    float milliseconds = 0;
 
     int select_index_size = nextPowerOf2(lenY);
 
@@ -1036,13 +1055,14 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
 
     cudaError_t cudaStatus;
     // Allocate GPU buffers for inputs and outputs.
-    cudaStatus = allocateMemory_with_size(&dev_H, &dev_DelH, &dev_W, &dev_B, &dev_E, &dev_bestSpinModel, &dev_Y, &dev_Selected_index, &dev_lenY, &dev_DelH_sign, &dev_bestenergy, &dev_Temprature, memory_size);
+    cudaStatus = allocateMemory_with_size(&dev_H, &dev_DelH, &dev_W, &dev_B, &dev_E, &dev_bestSpinModel, &dev_Y, &dev_Selected_index, &dev_lenY, &dev_DelH_sign, &dev_bestenergy, &dev_Temprature, memory_size, debug_mode);
 
-    cudaStatus = copyMemoryFromHostToDevice_with_size(vector_H, dev_H, vector_DelH, dev_DelH, vector_DelH_sign, dev_DelH_sign, WGpu, dev_W, vector_Y, dev_Y, vector_E, dev_E, *bestEnergy, dev_bestenergy, bestSpinModel, dev_bestSpinModel, dev_Selected_index, dev_Temprature, Temperature, memory_size);
+    cudaStatus = copyMemoryFromHostToDevice_with_size(vector_H, dev_H, vector_DelH, dev_DelH, vector_DelH_sign, dev_DelH_sign, WGpu, dev_W, vector_Y, dev_Y, vector_E, dev_E, *bestEnergy, bestEnergyArray, dev_bestenergy, bestSpinModel, dev_bestSpinModel, dev_Selected_index, dev_Temprature, Temperature, memory_size, debug_mode);
 
     
-    // Launch a kernel on the GPU with one thread for each element.
-    int size_of_shared_Memory = (2 * lenY + select_index_size)* sizeof(int) + (lenY+ replica + 1) * sizeof(double);
+    
+    //int size_of_shared_Memory = (2 * lenY + select_index_size)* sizeof(int) + (lenY+ replica + 1) * sizeof(double);
+    int size_of_shared_Memory = ((select_index_size) * sizeof(int)) + (lenY + number_of_temp + 2) * sizeof(double);
     //int size_of_shared_Memory = (2 * (lenY)+select_index_size) * sizeof(int) + (replica + ((lenY + 1) * lenY) + numberOfIteration) * sizeof(double);
     printf("size_of_shared_Memory : %d \n", size_of_shared_Memory);
     
@@ -1051,7 +1071,8 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start);
-    
+
+    // Launch a kernel on the GPU with one thread for each element.
     full_mode_metropolisKernel << <replica, lenY , size_of_shared_Memory >> > (dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, select_index_size, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration, exchange_attempts, extend_exchange_mode, dev_Temprature, number_of_temp, debug_mode, program_config);
     
 
@@ -1072,7 +1093,7 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
     cudaEventSynchronize(stop);
 
     // Calculate and print the elapsed time
-    float milliseconds = 0;
+    
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("Time elapsed: %f ms\n", milliseconds);
 
@@ -1084,12 +1105,12 @@ cudaError_t prepare_full_MetropolisKernel(double* vector_H, double* vector_DelH,
 
     // Copy output vector from GPU buffer to host memory.
     
-    copyMemoryFromDeviceToHost_with_size(vector_Y, dev_Y, bestSpinModel, vector_best_all_config, dev_bestSpinModel, bestEnergy, dev_bestenergy, vector_E, dev_E, memory_size);
+    copyMemoryFromDeviceToHost_with_size(vector_Y, dev_Y, bestSpinModel, vector_best_all_config, dev_bestSpinModel, bestEnergy, dev_bestenergy, vector_E, dev_E, memory_size, debug_mode);
 
     //cout << " \t\t\t Best Energy: " << bestEnergy << endl;
 
 Error:
-    FreeMemoryDevice(dev_H, dev_DelH, dev_W, dev_B, dev_E, dev_bestSpinModel, dev_Y, dev_Selected_index, dev_lenY, dev_DelH_sign, dev_bestenergy);
+    FreeMemoryDevice(dev_H, dev_DelH, dev_W, dev_B, dev_E, dev_bestSpinModel, dev_Y, dev_Selected_index, dev_lenY, dev_DelH_sign, dev_bestenergy, debug_mode);
 
     return cudaStatus;
 }
@@ -1097,7 +1118,7 @@ Error:
 
 
 // prepare memory to call Gpu Kernel
-cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, double* WGpu, double* B, int* Y, int lenY, double* E, double T, int step, int exchange_attempts, double& bestEnergy, int* bestSpinModel, int replica) {
+cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, double* WGpu, double* B, int* Y, int lenY, double* E, double T, int step, int exchange_attempts, double& bestEnergy, int* bestSpinModel, int replica, int debug_mode) {
     
     double* dev_H = 0;
     double* dev_DelH = 0;
@@ -1148,7 +1169,7 @@ cudaError_t prepareMetropolisKernel(double* H, double* DelHGpu, int* DelH_sign, 
     cout << " \t\t\t Best Energy: " << bestEnergy << endl;
 
 Error:
-    FreeMemoryDevice(dev_H, dev_DelH, dev_W, dev_B, dev_E, dev_bestSpinModel, dev_Y, dev_Selected_index, dev_lenY, dev_DelH_sign, dev_bestenergy);
+    FreeMemoryDevice(dev_H, dev_DelH, dev_W, dev_B, dev_E, dev_bestSpinModel, dev_Y, dev_Selected_index, dev_lenY, dev_DelH_sign, dev_bestenergy,debug_mode);
 
     return cudaStatus;
 }
@@ -1198,13 +1219,14 @@ double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y,int** best
     int* vector_Y;
     int* vector_best_all_config; 
     double* vector_W = convert2Dto1D(W, lenY, lenY);;
+    double* bestEnergyArray = new double[num_replicas];
 
     double* Temperature = new double[num_replicas];
     //if((program_config& TEMPERATURE_CIRCULAR)== TEMPERATURE_CIRCULAR)
     intitTemperature_circular_version(number_of_temp, minTemp, maxTemp, Temperature, program_config);
     //else
     //    intitTemperature(num_replicas, minTemp, maxTemp, Temperature, program_config);
-    bestEnergy = initEnergy(num_replicas, W, B, Y, lenY, E, bestSpinModel, debug_mode);
+    bestEnergy = initEnergy(num_replicas, W, B, Y, lenY, E, bestSpinModel, bestEnergyArray, debug_mode);
     cout << bestEnergy << endl;
 
     vector_DelH = VectorizedDelH(DelH, num_replicas, lenY);
@@ -1216,7 +1238,7 @@ double full_GPU_Mode(int num_replicas, double** W, double* B, int** Y,int** best
     vector_E = convert2Dto1D(E, num_replicas, numberOfIteration);
 
     
-    prepare_full_MetropolisKernel(vector_H, vector_DelH, DelH_sign, vector_W, B, vector_Y, vector_best_all_config, lenY, vector_E, Temperature, number_of_temp, exchange_attempts, extend_exchange_mode, &bestEnergy, bestSpinModel, num_replicas, numberOfIteration, debug_mode, program_config);
+    prepare_full_MetropolisKernel(vector_H, vector_DelH, DelH_sign, vector_W, B, vector_Y, vector_best_all_config, lenY, vector_E, Temperature, number_of_temp, exchange_attempts, extend_exchange_mode, &bestEnergy, bestEnergyArray, bestSpinModel, num_replicas, numberOfIteration, debug_mode, program_config);
     
     unVectorData(vector_Y, Y, vector_best_all_config, best_all_config, vector_E, E, numberOfIteration, num_replicas, lenY );
     
@@ -1241,12 +1263,13 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int** best_all_confi
     fill2DarrayInt(DelH_sign, 1, num_replicas, lenY);
     double** DelHGpu;
     double* WGpu;
+    double* bestEnergyArray = new double[num_replicas];
     
     
 
     
     //initialize the bestEnergy, Energy (E), Magnet (M), and bestSpinModel
-    bestEnergy = initEnergy(num_replicas, W, B, Y, lenY, E, bestSpinModel, debug_mode);
+    bestEnergy = initEnergy(num_replicas, W, B, Y, lenY, E, bestSpinModel, bestEnergyArray, debug_mode);
 
     cout << "The best initial energy: " << bestEnergy << endl;
     if (ExecuteMode == QUBOGPUFULL) {
@@ -1274,7 +1297,7 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int** best_all_confi
             double previousE = E[r][step - 1];
                         
             if (ExecuteMode == QUBOGPU) {                
-                prepareMetropolisKernel(H[r], DelHGpu[r], DelH_sign[r], WGpu, B, Y[r], lenY, E[r], T, step, exchange_attempts, bestEnergy, bestSpinModel, r);
+                prepareMetropolisKernel(H[r], DelHGpu[r], DelH_sign[r], WGpu, B, Y[r], lenY, E[r], T, step, exchange_attempts, bestEnergy, bestSpinModel, r, debug_mode);
                     
             }else { // Ising or QUBO
                 previousE = metropolis(ExecuteMode, W, B, H[r], DelH[r], Y[r], lenY, previousE, T, step, r, debug_mode);

@@ -447,11 +447,12 @@ double initEnergyAndMagnet(int num_replicas, double** W, double* B, int** Y, int
 }
 
 
-double initEnergy(int num_replicas, double** W, double* B, int** Y, int lenY, double** E, int* bestSpinModel, int debug_mode) {
+double initEnergy(int num_replicas, double** W, double* B, int** Y, int lenY, double** E, int* bestSpinModel, double* bestEnergyArray, int debug_mode) {
     double bestEnergy = 0;
     if (num_replicas != 1) {
         for (int r = 0; r < num_replicas; r++) {
             E[r][0] = energy_version2(W, B, Y[r], lenY, debug_mode);
+            bestEnergyArray[r] = E[r][0];
             if ((debug_mode & DEBUG_INIT_CONFIG) != 0) print_log_host("create bit config", 0, r, r, -1, E[r][0], 0, 0, 0, 0, -1, -1);
 
 
@@ -465,6 +466,7 @@ double initEnergy(int num_replicas, double** W, double* B, int** Y, int lenY, do
     else {
         E[0][0] = energy_version2(W, B, Y[0], lenY, debug_mode);
         bestEnergy = E[0][0];
+        bestEnergyArray[0] = E[0][0];
         memcpy(bestSpinModel, Y[0], sizeof(int) * lenY);
     }
     return bestEnergy;
