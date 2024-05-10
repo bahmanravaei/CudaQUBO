@@ -271,6 +271,9 @@ int set_program_config(string value) {
     else if (value == "FAST_CONVERGE") {
         program_config = FAST_CONVERGE;
     }
+    else if (value == "HIGH_TEMP_FAST_FLIP") {
+        program_config = HIGH_TEMP_FAST_FLIP;
+    }
 
 
     return program_config;

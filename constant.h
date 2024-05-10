@@ -4,6 +4,12 @@
 #define TEMPERATURE_GEOMETRIC	1
 #define TEMPERATURE_CIRCULAR	2
 #define FAST_CONVERGE			8
+#define HIGH_TEMP_FAST_FLIP		16
+#define HIGH_TEMP_FAST_FLIP_PRO	0.33
+
+
+#define CURRENT_FLIP			Shared_selected_index[0]
+
 
 #define SEED_COEF				123456789
 #define	DATA_OFFSET_MASK		0xFFFFFFE0

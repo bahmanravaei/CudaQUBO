@@ -429,7 +429,27 @@ __device__  void select_flipping_bit(int select_index_size, int threadId, int* S
 }
 
 
-
+__device__ int fill_Shared_selected_index(int threadId, int* Shared_selected_index, int blockSize, double random_double) {
+    Shared_selected_index[threadId] = -1;
+    int next_valid_index = 0;
+    if (random_double < HIGH_TEMP_FAST_FLIP_PRO) {
+        Shared_selected_index[threadId] = threadId;
+        //printf("%d\n", threadId);
+    }
+    __syncthreads();
+    if (threadId == 0) {
+        for (int i = 0; i < blockSize; i++) {
+            if (Shared_selected_index[i] != -1) {
+                Shared_selected_index[next_valid_index] = Shared_selected_index[i];
+                if (next_valid_index != i)
+                    Shared_selected_index[i] = -1;
+                next_valid_index++;
+            }
+        }
+    }
+    __syncthreads();
+    return next_valid_index;
+}
 
 
 //dev_H, dev_DelH, dev_DelH_sign, dev_Y, dev_Selected_index, lenY, dev_E, dev_bestSpinModel, dev_bestenergy, numberOfIteration
@@ -503,6 +523,8 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     double random_double;
     unsigned int random_int;
     int next_exchange = exchange_attempts;
+    bool high_temp_first_time = true;
+    int next_valid_index=-1;
     //point 1: time: 0.63 ms
     //curandState state;
     // point 2: This part is time consuming, we should change it!!!> 162 ms
@@ -510,29 +532,49 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
     
     for (int step = 1; step < numberOfIteration; step++) {
         //point3:  time : 754 ms
-        
+
+
+        // Generate a random double nubmer
+        random_double = generateRandomDouble(0, 1, &seed);
+        random_int = seed;
+
+
+        if ((temprature_index == number_of_temp - 1) && (program_config & HIGH_TEMP_FAST_FLIP) == HIGH_TEMP_FAST_FLIP) {
+            if (high_temp_first_time == true) {
+                next_valid_index = fill_Shared_selected_index(threadId, Shared_selected_index, blockDim.x, random_double);
+                //if (tid == 0)printf("\t step: %d next_valid_index : %d\n", step, next_valid_index);
+                high_temp_first_time = false;
+            }
+            else if(threadId==0 && next_valid_index>1)
+            {
+                next_valid_index--;
+                CURRENT_FLIP= Shared_selected_index[next_valid_index];
+
+            }
+            else if (threadId == 0 && next_valid_index == 1)
+            {
+                CURRENT_FLIP = -1;
+                
+            }
+            __syncthreads();
+            //if (tid == 0)printf("step:%d CURRENT_FLIP %d, dev_E %lf\n ",step, CURRENT_FLIP, dev_E[step-1]);
+            if(CURRENT_FLIP==-1) {
+                next_exchange = step;
+                //high_temp_first_time = true;
+            }
+            if (threadId == CURRENT_FLIP) {
+                deltaE = -1 * (1 - 2 * Y) * Shared_H[threadId];
+            }
+            high_temp_first_time = false;
+        }
+        else {
             //compute Delata energy
-            // Change shared_Y[tid] with a local variable    
-            //deltaE = -1 * (1 - 2 * Shared_Y[threadId]) * Shared_H[threadId];
             deltaE = -1 * (1 - 2 * Y) * Shared_H[threadId];
-            //point 4: time:  8150 ms
-            
-            
+
+
 
             // Make decision that a bit flip can be accepted
-            // Generate a random double nubmer
-            
-            //This part is realy time consuming and should be changed.
-            
-            //random_double = curand_uniform_double(&state);
-            random_double = generateRandomDouble(0, 1, &seed);
-            random_int = seed;
-            
-            //point 5: time : 105,682 ms
-            
-            // time: 4,937 ms
-            
-            
+
             Shared_selected_index[threadId] = -1;
             if (deltaE < 0) {
                 //dev_Selected_index[index_base+threadId] = threadId;
@@ -542,36 +584,36 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             else if (random_double < expf(-deltaE / Shared_Temprature[temprature_index])) {
                 Shared_selected_index[threadId] = threadId;
                 if ((debug_mode & DEBUG_RANDOM_FLIP) != 0) printLog("random candiate", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], deltaE, 0, Shared_H[threadId], 0, -1, -1);
-                    //printf("\titeration:%d BId: %d, tId: %d, flip suggestion by randomness. DeltaE: %lf \n", step, blockId, threadId, deltaE);
+                //printf("\titeration:%d BId: %d, tId: %d, flip suggestion by randomness. DeltaE: %lf \n", step, blockId, threadId, deltaE);
             }
-            
+
             //point 6: time: 30,517
-            
+
             // This syncthread add around 3 seconds to execution time.       
             __syncthreads();
             // point 7: time:  33,878
-            
+
 
 
             // select which bit accepted 
             select_flipping_bit(select_index_size, threadId, Shared_selected_index, random_int);
             //select_flipping_bit_v2(select_index_size, threadId, Shared_selected_index, random_int);
-            
+
             //select_flipping_bit_v4(select_index_size, threadId, Shared_selected_index, random_int); // for scenario select_index >=64
-            
+
             //reduce_to_select_a_bit(Shared_selected_index, threadId, select_index_size, random_int);
             //reduce_to_select_a_bit_v2(Shared_selected_index, threadId, select_index_size, random_int);
             //point 8: time : 333,611
-            
-            
 
-            
+
+
+
             //__syncthreads();
             // point 9: time: 338,722    338,964
-            
+        }
             
             // based on the flipped bit j update parameters
-            int j = Shared_selected_index[0];
+            int j = CURRENT_FLIP; //Shared_selected_index[0];
             
             if (j == -1) {
                 No_new_suggestion -= 1;
@@ -622,6 +664,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 best_config_Y = Y;
                 if ((program_config & FAST_CONVERGE) == FAST_CONVERGE) {
                     //if (tid == 0 && temprature_index != 0)printf("\t\t\t step: %d drop temp to zero level\n", step);
+                    //if (tid == 0)printf("** \t step: %d, temp_index: %d drop temp\n", step, temprature_index);
                     temprature_index = 0;
                     temp_index_direction = 1;
                     if (next_exchange < step + extend_exchange_step)
@@ -629,7 +672,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 }
 
                 //if(threadId==0) printf("\treplica: %d, bestEnergy %lf \n", blockId, *shared_best_energy);
-                if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0 && threadId == 0) printLog("best energy", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step], 0, 0, j, -1);
+                //if ((debug_mode & DEBUG_FIND_BEST_ENERGY) != 0 && threadId == 0) printLog("best energy", step, temprature_index, blockId, threadId, dev_E[blockId * numberOfIteration + step - 1], 0, dev_E[blockId * numberOfIteration + step], 0, 0, j, -1);
             }
             
             //time: almost same as previous part
@@ -640,7 +683,7 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 
                 // Update delta_H
                 dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j] *= -1;
-                if ((debug_mode & DEBUG_UPDATE_H) != 0) printLog("Update H", step, temprature_index, blockId, threadId, 0, 0, 0, Shared_H[threadId], dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j], j, blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j);
+                //if ((debug_mode & DEBUG_UPDATE_H) != 0) printLog("Update H", step, temprature_index, blockId, threadId, 0, 0, 0, Shared_H[threadId], dev_DelH[blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j], j, blockId * blockDim.x * blockDim.x + threadId * blockDim.x + j);
 
                 /*if (step > 2 && dev_E[blockId * numberOfIteration + step] == dev_E[blockId * numberOfIteration + step - 2])
                     No_new_suggestion -= 1;
@@ -655,8 +698,9 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
                 No_new_suggestion = extend_exchange_step;
                 if ((program_config & FAST_CONVERGE) == FAST_CONVERGE) {
                     temp_index_direction = 1;
+                    //if (tid == 0)printf("** \t step: %d, temp_index: %d increase No_new_suggestion\n", step, temprature_index);
                     temprature_index += temp_index_direction;
-                    stop_flag = true;
+                    stop_flag = false;
                     next_exchange = step + exchange_attempts;
                 }
             }
@@ -668,13 +712,14 @@ __global__ void full_mode_metropolisKernel(double* dev_H, double* dev_DelH, int*
             
             
             if (step == next_exchange) {
+                //if (tid == 0)printf("** \t step: %d, temp_index: %d\n", step, temprature_index);
                 No_new_suggestion = extend_exchange_step;
                 if ((program_config & TEMPERATURE_CIRCULAR) == TEMPERATURE_CIRCULAR) {
                     if (temprature_index==0) temprature_index = number_of_temp-1;
                     else temprature_index--;
                 }else if (stop_flag == false) {
                     temprature_index += temp_index_direction;
-
+                    high_temp_first_time = true;
                     if (temprature_index == 0 || temprature_index == number_of_temp - 1) {
                         stop_flag = true;
                         temp_index_direction = temp_index_direction * -1;
@@ -1263,8 +1308,6 @@ void ising(int ExecuteMode, double** W, double* B, int** Y, int** best_all_confi
 
 int main()
 {
-    
-
 
     int L = 0;                      // Number of spins for each replica
     int Lsqrt = 0;                  /* This parameter is just used for graphical representation of 2-D Ising model
